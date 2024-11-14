@@ -1,5 +1,6 @@
 import raylibpy as rl
 import math 
+from math import radians
 from enum import Enum
 
 #CAMBIO DE PRUEBA
@@ -48,7 +49,8 @@ class Player:
 		self.movement: rl.Vector2 = rl.Vector2(0,0)
 		self.color = init_color
 		self.speed = 5
-		self.frict = 1
+		self.newspeed = 0
+		self.frict = 0.2
 		self.max_speed = 10
 		self.rotation_speed = 3
 		self.weapons = [5,10,25]
@@ -106,17 +108,13 @@ class Player:
 				self.world.add_objects([new_bullet])
 				self.ammo[self.weapon_selector] -= 1
 
+	def speed_friction(self):
+
+		self.speed
+
 	def input(self):
 
 
-		
-		#YA APRENDI A HACER MOVIMIENTO BASADO EN EL ANGULO
-		if rl.is_key_down(rl.KEY_W):
-			self.movement += rl.Vector2(math.cos(math.radians(self.angle))*self.speed,math.sin(math.radians(self.angle))*self.speed)
-		if rl.is_key_down(rl.KEY_S):
-			self.movement -= rl.Vector2(math.cos(math.radians(self.angle))*self.speed,math.sin(math.radians(self.angle))*self.speed)
-
-		
 
 		#CAMBIAR ROTACION CON TECLAS A Y D
 		if rl.is_key_down(rl.KEY_A):
@@ -124,25 +122,33 @@ class Player:
 		if rl.is_key_down(rl.KEY_D):
 			self.angle += self.rotation_speed
 
-		#FRICCION ASÍ MANUAL
-		if self.movement.x < 0:
-			self.movement.x = round(self.movement.x+self.frict)
-		if self.movement.x > 0:
-			self.movement.x = round(self.movement.x-self.frict)
 
-		if self.movement.y < 0:
-			self.movement.y = round(self.movement.y+self.frict)
-		if self.movement.y > 0:
-			self.movement.y = round(self.movement.y-self.frict)
+		if rl.is_key_down(rl.KEY_W):
+			self.movement.x = math.cos(radians(self.angle))
+			self.movement.y = math.sin(radians(self.angle))
 
-		rl.vector2_normalize(self.movement)
-		#ASIGNAR VALOR AL VECTOR MOVEMENT Y CLAMPEARLO A UN LIMITE DE VELOCIDAD
-		self.movement = rl.vector2_clamp(self.movement,rl.Vector2(-self.max_speed,-self.max_speed),rl.Vector2(self.max_speed,self.max_speed))
+		if rl.is_key_down(rl.KEY_S):
+			self.movement.x = -math.cos(radians(self.angle))
+			self.movement.y = -math.sin(radians(self.angle))
+
+
+
+		#NORMALIZAR MANUALMENTE PORQUE NO HAY UNA FUNCION DE MIERDA 
+		magnitude = math.sqrt(self.movement.x ** 2 + self.movement.y ** 2)
+		if magnitude != 0:
+			
+			self.movement = rl.Vector2((self.movement.x/magnitude),(self.movement.y/magnitude))
+	
+		#SI NO HAY TECLA DE ADELANTE O ATRAS, APLICAR FRICCION
+
+
+		#CONVERTIR A ENTERO PARA EVITAR EL JITTERNESS
+		self.movement.x,self.movement.y = round(self.movement.x,2),round(self.movement.y,2)
 		
-		#APROXIMAR DECIMALES PA QUE NO LOKEE
-		self.movement = rl.Vector2(round(self.movement.x,2),round(self.movement.y,2))
 
-		return self.movement
+		#REGRESAR EL MOVEMENT MULTIPLICADO POR LA VELOCIDAD REAL
+		
+		return self.movement * self.speed
 
 	def update_children(self):
 
@@ -157,7 +163,9 @@ class Player:
 
 	def update(self):
         
+		self.speed_friction()
 		self.position += self.input()
+		print(self.movement)
 		self.draw()
 		self.update_children()
 		self.input_attack()
