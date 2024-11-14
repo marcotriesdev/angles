@@ -18,8 +18,20 @@ class Ammo_type(Enum):
 	cal50 = 2
 	rockets = 3
 
+class Enemy_type(Enum):
 
-rl.init_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Ejemplo de Boilerplate con raylibpy")
+	small = 1
+	medium = 2
+	big = 3
+	boss = 4
+
+class Enemy_state(Enum):
+
+	idle = 1
+	chasing = 2
+	attack = 3
+
+rl.init_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Juego de disparos 1.0")
 rl.set_target_fps(60)
 
 class World:
@@ -50,8 +62,25 @@ class AmmoGenerator:
 		for amt in range (self.amounts[ammo_type]):
 			newx = randrange(0,SCREEN_WIDTH,1)
 			newy = randrange(0,SCREEN_HEIGHT,1)
-			newammo = Ammo_pup(Ammo_type.bullets,rl.Vector2(newx,newy))
-			self.world.object_list.append(newammo)
+			new_ammo = Ammo_pup(ammo_type,rl.Vector2(newx,newy))
+			self.world.object_list.append(new_ammo)
+
+
+class EnemyGenerator:
+
+	def __init__(self,small,mid,big,boss,world,gui):
+
+		self.amounts = {Enemy_type.small: small, Enemy_type.medium: mid, Enemy_type.big: big, Enemy_type.boss: boss}
+		self.world = world
+		self.gui = gui
+
+	def generate(self,enemy_type):
+
+		for amt in range (self.amounts[enemy_type]):
+			newx = randrange(0,SCREEN_WIDTH)
+			newy = randrange(0,SCREEN_HEIGHT)
+			new_enemy = Enemy(rl.Vector2(newx,newy),enemy_type,self.gui)
+			self.world.object_list.append(new_enemy)
 
 
 
@@ -194,11 +223,6 @@ class Player:
 						self.messages.append(new_message)
 
 
-
-
-
-
-
 	def update_children(self):
 
 		for child in self.children:
@@ -273,10 +297,18 @@ class Bullet:
 
 		self.caliber_colors = {Ammo_type.bullets:rl.BLACK,Ammo_type.cal50:rl.GRAY,Ammo_type.rockets:rl.DARKBROWN}
 		self.caliber_size = {Ammo_type.bullets: 5,Ammo_type.cal50: 10, Ammo_type.rockets: 25}
+
 		self.caliber_lifetime = {Ammo_type.bullets:100, 
 								Ammo_type.cal50:80, 
 								Ammo_type.rockets:50} 
+
+		self.caliber_power ={Ammo_type.bullets: 1,
+							Ammo_type.cal50: 5, 
+							Ammo_type.rockets: 10}
+
 		self.lifetime = self.caliber_lifetime[self.caliber]
+		self.power = self.caliber_power[self.caliber]
+		self.size = self.caliber_size[self.caliber]
 
 	def move_bullet(self):
 
@@ -298,6 +330,130 @@ class Bullet:
 		self.move_bullet()
 		self.draw()
 
+class Enemy:
+
+	def __init__(self,init_position,enemy_type,gui):
+
+		self.gui = gui
+		self.position = init_position
+		self.type_data ={Enemy_type.small: {
+							"hp": 10,
+							"color":rl.Color(150,190,150,255),
+							"atk":5,
+							"size":30,
+							"range_radius":50,
+							"speed":2
+							},
+						Enemy_type.medium: {
+							"hp": 15,
+							"color":rl.Color(140,140,120,255),
+							"atk":8,
+							"size":32,
+							"range_radius":50,
+							"speed":4
+							},
+						Enemy_type.big: {
+							"hp": 25,
+							"color":rl.Color(150,100,100,255),
+							"atk":20,
+							"size":40,
+							"range_radius":25,
+							"speed":5
+							},
+						Enemy_type.boss: {
+							"hp": 50,
+							"color":rl.Color(50,15,15,255),
+							"atk":15,
+							"size":50,
+							"range_radius":80,
+							"speed":5
+							}
+						}
+
+		if enemy_type not in self.type_data:
+			raise ValueError(f"Tipo de enemigo {enemy_type} no reconocido.")
+
+
+		self.state = Enemy_state.idle
+		self.type = enemy_type
+		self.hp = self.type_data[self.type]          ["hp"]
+		self.color = self.type_data[self.type]       ["color"]
+		self.atk = self.type_data[self.type]         ["atk"]
+		self.size = self.type_data[self.type]        ["size"]
+		self.range_radius = self.type_data[self.type]["range_radius"]
+		self.speed = self.type_data[self.type]       ["speed"]
+
+		self.shield = False
+
+		self.initial_timer = 50
+		self.timer = self.initial_timer
+
+
+
+	def timer_function(self):
+
+		if self.timer > 0:
+			self.timer -= 1
+		else:
+			self.timer = 50
+	
+
+	def select_behavior(self):
+
+		match self.state:
+
+			case Enemy_state.idle:
+				self.idle_behavior()
+
+			case Enemy_state.chasing:
+				self.chasing_behavior()
+
+			case Enemy_state.attack:
+				self.attack_behavior()
+
+	def check_collision(self,group):
+
+		if self.hp > 0:
+			for obj in group:
+				if hasattr(obj,"caliber"):
+					if rl.check_collision_circles(self.position,self.size,obj.position,obj.size):
+						self.hp -= obj.power
+						new_damage_mgs = DamageMessage(f"-{obj.power}",obj.position)
+						self.gui.messages.append(new_damage_mgs)
+						group.remove(obj) #METER ANIMACION BONITA AKI
+		
+		else:
+			print(f"murió un {self.type} salvaje")
+			group.remove(self)
+					
+
+
+	def idle_behavior(self):
+
+		if self.timer == 1:
+			pass
+		
+
+	def chasing_behavior(self):
+		pass
+
+	def attack_behavior(self):
+		pass
+
+	
+
+	def draw(self):
+
+		rl.draw_circle_v(self.position,self.size,self.color)
+
+	def update(self, group):
+
+		self.timer_function()
+		self.select_behavior()
+		self.check_collision(group)
+		self.draw()
+
+
 class GUI:
 
 	def __init__(self,player):
@@ -317,8 +473,6 @@ class GUI:
 		rl.draw_text(f"ROCKETS        : {self.player.ammo[Ammo_type.rockets]} ",160,115,20,rl.Color(200,0,0,200))
 
 	
-
-	
 	def update(self):
 
 		self.messages = self.player.messages
@@ -328,7 +482,7 @@ class GUI:
 				msg.update()
 			else:
 				self.player.messages.remove(msg)
-				print("killed a text message")
+			
 
 		self.draw_hud()
 
@@ -342,11 +496,9 @@ class MessagePickup:
 		self.color = rl.Color(10,100,10,255)
 		self.active = True
 
-
 	def fade(self):
 
 		if self.color.a > 1:
-			print(self.color.a)
 			self.color.a -= 2
 			self.position.y -= 0.5
 		else:
@@ -363,7 +515,12 @@ class MessagePickup:
 		self.draw()
 
 
+class DamageMessage(MessagePickup):
 
+	def __init__(self,text,init_position):
+
+		super().__init__(text,init_position)
+		self.color = rl.Color(200,10,10,255)
 
 
 class Ammo_pup:
@@ -400,19 +557,20 @@ class Ammo_pup:
 game_world = World([])
 player1 = Player(rl.Vector2(200,300),0,rl.GREEN,game_world)
 
-ammo1 = Ammo_pup(Ammo_type.bullets,rl.Vector2(500,500))
-ammo2 = Ammo_pup(Ammo_type.cal50,rl.Vector2(580,600))
-ammo3 = Ammo_pup(Ammo_type.rockets,rl.Vector2(10,400))
-
-
-game_world.add_objects([player1,ammo1,ammo2,ammo3])
+game_world.add_objects([player1])
 
 game_gui  = GUI(player1)
 ammo_gen = AmmoGenerator(10,8,5,game_world)
+enemy_gen = EnemyGenerator(10,10,5,0,game_world,game_gui)
 
 ammo_gen.generate(Ammo_type.bullets)
 ammo_gen.generate(Ammo_type.cal50)
 ammo_gen.generate(Ammo_type.rockets)
+
+enemy_gen.generate(Enemy_type.small)
+enemy_gen.generate(Enemy_type.medium)
+enemy_gen.generate(Enemy_type.big)
+
 
 # Bucle principal del juego
 while not rl.window_should_close():
