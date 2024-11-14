@@ -35,7 +35,7 @@ class World:
 	def world_update(self):
 
 		for object in self.object_list:
-			object.update()
+			object.update(self.object_list)
 
 
 
@@ -49,18 +49,22 @@ class Player:
 		self.movement: rl.Vector2 = rl.Vector2(0,0)
 		self.color = init_color
 		self.speed = 5
-		self.newspeed = 0
-		self.frict = 0.2
+		self.original_speed = self.speed
+		self.frict = 0.1
 		self.max_speed = 10
 		self.rotation_speed = 3
-		self.weapons = [5,10,25]
+		self.weapons = [Ammo_type.bullets,Ammo_type.cal50,Ammo_type.rockets]
 		self.world = world
 
-		self.ammo = {5:100,10:50,25:5}
+		self.ammo = {Ammo_type.bullets:100,Ammo_type.cal50:50,Ammo_type.rockets:5}
+		self.ammo_per_type = {Ammo_type.bullets:[25,0,0],Ammo_type.cal50:[0,10,0],Ammo_type.rockets:[0,0,1]}
+		self.ammo_messages = {Ammo_type.bullets: "You Pickup [25] Bullets!",Ammo_type.cal50: "You Pickup [10] Cal .50 Bullets!",Ammo_type.rockets: "You Pickup a ROCKET!"}
 
 		self.weapon_selector = self.weapons[0]
 
 		self.children = []
+		self.messages = []
+
 
 		self.create_lines()
 		
@@ -68,11 +72,12 @@ class Player:
 
 		pass
 
-	def receive_ammo(self,cal5,cal10,cal25):
+	def receive_ammo(self,ammo_array):
 
-		self.ammo[5] += cal5
-		self.ammo[10] += cal10
-		self.ammo[25] += cal25
+		print(ammo_array)
+		self.ammo[Ammo_type.bullets] += ammo_array[0]
+		self.ammo[Ammo_type.cal50] += ammo_array[1]
+		self.ammo[Ammo_type.rockets] += ammo_array[2]
 
 
 	def create_lines(self):
@@ -110,11 +115,18 @@ class Player:
 
 	def speed_friction(self):
 
-		self.speed
+		if self.speed > 0:
+			self.speed -= self.frict
+
+		if self.speed < 0:
+			self.speed = 0
+
+	
 
 	def input(self):
 
 
+		self.speed_friction()
 
 		#CAMBIAR ROTACION CON TECLAS A Y D
 		if rl.is_key_down(rl.KEY_A):
@@ -124,10 +136,12 @@ class Player:
 
 
 		if rl.is_key_down(rl.KEY_W):
+			self.speed = self.original_speed
 			self.movement.x = math.cos(radians(self.angle))
 			self.movement.y = math.sin(radians(self.angle))
 
 		if rl.is_key_down(rl.KEY_S):
+			self.speed = self.original_speed
 			self.movement.x = -math.cos(radians(self.angle))
 			self.movement.y = -math.sin(radians(self.angle))
 
@@ -150,6 +164,25 @@ class Player:
 		
 		return self.movement * self.speed
 
+	def collision_ammo(self,group):
+
+		
+
+		for object in group:
+			if hasattr(object,"rect"):
+				if rl.check_collision_circle_rec(self.position,self.size,object.rect):
+					if not object.open:
+						self.receive_ammo(self.ammo_per_type[object.type])
+						object.open = True
+						new_message = MessagePickup(self.ammo_messages[object.type],object.position)
+						self.messages.append(new_message)
+
+
+
+
+
+
+
 	def update_children(self):
 
 		for child in self.children:
@@ -161,14 +194,15 @@ class Player:
 		
 		
 
-	def update(self):
+	def update(self,group):
         
 		self.speed_friction()
 		self.position += self.input()
-		print(self.movement)
+
 		self.draw()
 		self.update_children()
 		self.input_attack()
+		self.collision_ammo(group)
 		
 
 
@@ -221,10 +255,11 @@ class Bullet:
 		
 		self.caliber = caliber
 
-		self.caliber_colors = {5:rl.BLACK,10:rl.GRAY,25:rl.DARKBROWN}
-		self.caliber_lifetime = {5:100, 
-								10:80, 
-								25:50} 
+		self.caliber_colors = {Ammo_type.bullets:rl.BLACK,Ammo_type.cal50:rl.GRAY,Ammo_type.rockets:rl.DARKBROWN}
+		self.caliber_size = {Ammo_type.bullets: 5,Ammo_type.cal50: 10, Ammo_type.rockets: 25}
+		self.caliber_lifetime = {Ammo_type.bullets:100, 
+								Ammo_type.cal50:80, 
+								Ammo_type.rockets:50} 
 		self.lifetime = self.caliber_lifetime[self.caliber]
 
 	def move_bullet(self):
@@ -240,9 +275,9 @@ class Bullet:
 
 	def draw(self):
 
-		rl.draw_circle_v(self.position,self.caliber,self.caliber_colors[self.caliber])
+		rl.draw_circle_v(self.position,self.caliber_size[self.caliber],self.caliber_colors[self.caliber])
 
-	def update(self):
+	def update(self,group):
 
 		self.move_bullet()
 		self.draw()
@@ -252,28 +287,77 @@ class GUI:
 	def __init__(self,player):
 
 		self.player = player
-		self.weapon_box = {5:rl.Rectangle(158,51,250,23), 
-							10:rl.Rectangle(158,82,250,23),
-								25:rl.Rectangle(158,112,250,23)}
+		self.weapon_box = {Ammo_type.bullets:rl.Rectangle(158,51,250,23), 
+							Ammo_type.cal50:rl.Rectangle(158,82,250,23),
+								Ammo_type.rockets:rl.Rectangle(158,112,250,23)}
+		self.messages = []
 
 	def draw_hud(self):
 
 		rl.draw_rectangle_lines_ex(self.weapon_box[self.player.weapon_selector], 3, rl.Color(50,250,0,200)) 
 		rl.draw_text_pro(rl.get_font_default(),f"AMMO:",rl.Vector2(50,35),rl.Vector2(0,0),40,30,2,rl.Color(55,55,55,200))
-		rl.draw_text(f"AK47 BULLETS   : {self.player.ammo[5]} ",160,55,20,rl.Color(55,55,55,200))
-		rl.draw_text(f"CAL 50 BULLETS : {self.player.ammo[10]} ",160,85,20,rl.Color(150,150,0,200))
-		rl.draw_text(f"ROCKETS        : {self.player.ammo[25]} ",160,115,20,rl.Color(200,0,0,200))
+		rl.draw_text(f"AK47 BULLETS   : {self.player.ammo[Ammo_type.bullets]} ",160,55,20,rl.Color(55,55,55,200))
+		rl.draw_text(f"CAL 50 BULLETS : {self.player.ammo[Ammo_type.cal50]} ",160,85,20,rl.Color(150,150,0,200))
+		rl.draw_text(f"ROCKETS        : {self.player.ammo[Ammo_type.rockets]} ",160,115,20,rl.Color(200,0,0,200))
+
+	
 
 	
 	def update(self):
 
+		self.messages = self.player.messages
+
+		for msg in self.messages:
+			if msg.active:
+				msg.update()
+			else:
+				self.player.messages.remove(msg)
+				print("killed a text message")
+
 		self.draw_hud()
+
+
+class MessagePickup:
+
+	def __init__(self,text,init_position):
+
+		self.text = text
+		self.position = init_position
+		self.color = rl.Color(10,100,10,255)
+		self.active = True
+
+
+	def fade(self):
+
+		if self.color.a > 1:
+			print(self.color.a)
+			self.color.a -= 2
+			self.position.y -= 0.5
+		else:
+			self.active = False
+
+	def draw(self):
+
+		rl.draw_text(self.text,self.position.x,self.position.y,20,self.color)
+		
+
+	def update(self):
+		
+		self.fade()
+		self.draw()
+
+
+
+
 
 class Ammo_pup:
 
 	def __init__(self,type: Ammo_type,position):
 
 		self.type = type
+
+		self.open = False
+
 		self.position = position
 
 		self.rects = {Ammo_type.bullets:rl.Rectangle(self.position.x,self.position.y,30,50),
@@ -282,12 +366,17 @@ class Ammo_pup:
 		self.colors = {Ammo_type.bullets:rl.Color(100,100,20,255),
 						Ammo_type.cal50:rl.Color(80,150,20,255),
 						Ammo_type.rockets:rl.Color(80,150,80,255)}
+		
+		self.rect = self.rects[self.type]
 
 	def draw(self):
 
-		rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,self.colors[self.type])
+		if self.open:
+			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,rl.Color(100,100,100,100))
+		else:	
+			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,self.colors[self.type])
 
-	def update(self):
+	def update(self,group):
 
 		self.draw()
 
