@@ -2,6 +2,7 @@ import raylibpy as rl
 import math 
 from math import radians
 from enum import Enum
+from random import randrange
 
 #CAMBIO DE PRUEBA
 #Cambio de prueba 2
@@ -36,6 +37,21 @@ class World:
 
 		for object in self.object_list:
 			object.update(self.object_list)
+
+class AmmoGenerator:
+
+	def __init__(self,bullets,cal50,rockets,world):
+
+		self.amounts = {Ammo_type.bullets: bullets,Ammo_type.cal50: cal50, Ammo_type.rockets: rockets}
+		self.world = world
+
+	def generate(self,ammo_type):
+
+		for amt in range (self.amounts[ammo_type]):
+			newx = randrange(0,SCREEN_WIDTH,1)
+			newy = randrange(0,SCREEN_HEIGHT,1)
+			newammo = Ammo_pup(Ammo_type.bullets,rl.Vector2(newx,newy))
+			self.world.object_list.append(newammo)
 
 
 
@@ -392,8 +408,11 @@ ammo3 = Ammo_pup(Ammo_type.rockets,rl.Vector2(10,400))
 game_world.add_objects([player1,ammo1,ammo2,ammo3])
 
 game_gui  = GUI(player1)
+ammo_gen = AmmoGenerator(10,8,5,game_world)
 
-
+ammo_gen.generate(Ammo_type.bullets)
+ammo_gen.generate(Ammo_type.cal50)
+ammo_gen.generate(Ammo_type.rockets)
 
 # Bucle principal del juego
 while not rl.window_should_close():
