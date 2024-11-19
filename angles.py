@@ -2,8 +2,9 @@ import raylibpy as rl
 import math 
 from math import radians
 from enum import Enum
-from random import randrange
+from random import randrange, choice
 
+print(rl.RAYLIB_VERSION)
 #CAMBIO DE PRUEBA
 #Cambio de prueba 2
 # Inicialización de la ventana
@@ -30,6 +31,20 @@ class Enemy_state(Enum):
 	idle = 1
 	chasing = 2
 	attack = 3
+
+
+#COLORS
+
+RED_1 = rl.Color(255,10,0)
+RED_2 = rl.Color(255,15,0)
+RED_3 = rl.Color(255,10,6)
+RED_4 = rl.Color(200,0,0)
+
+ORANGE_1 = rl.Color(255,200,0)
+ORANGE_2 = rl.Color(210,170,5)
+
+
+
 
 rl.init_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Juego de disparos 1.0")
 rl.set_target_fps(60)
@@ -154,7 +169,7 @@ class Player:
 
 		if rl.is_key_pressed(rl.KEY_SPACE):
 			if self.ammo[self.weapon_selector] > 0:
-				new_bullet = Bullet(self.position,self.movement,self,self.weapon_selector)
+				new_bullet = Bullet(self.position,self.movement,self,self.weapon_selector,self.world)
 				self.world.add_objects([new_bullet])
 				self.ammo[self.weapon_selector] -= 1
 
@@ -281,9 +296,10 @@ class Linesofplayer:
 
 class Bullet:
 
-	def __init__(self,init_position,parent_movement,player,caliber):
+	def __init__(self,init_position,parent_movement,player,caliber,world):
 
 		self.player = player
+		self.world = world
 
 		
 		self.movement = parent_movement
@@ -291,44 +307,80 @@ class Bullet:
 		self.offset = 10
 		self.position = init_position + rl.Vector2(math.cos(self.angle)*self.offset,math.sin(self.angle)*self.offset)
 		
-		self.speed = 20
-		
 		self.caliber = caliber
 
-		self.caliber_colors = {Ammo_type.bullets:rl.BLACK,Ammo_type.cal50:rl.GRAY,Ammo_type.rockets:rl.DARKBROWN}
-		self.caliber_size = {Ammo_type.bullets: 5,Ammo_type.cal50: 10, Ammo_type.rockets: 25}
+		self.caliber_colors = {Ammo_type.bullets:rl.BLACK,
+								Ammo_type.cal50:rl.GRAY,
+								Ammo_type.rockets:rl.DARKBROWN
+								}
+
+		self.caliber_size = {Ammo_type.bullets: 5,
+							Ammo_type.cal50: 10, 
+							Ammo_type.rockets: 25
+							}
+
+		self.caliber_speed = {Ammo_type.bullets: 25,
+							Ammo_type.cal50: 27, 
+							Ammo_type.rockets: 15
+							}
 
 		self.caliber_lifetime = {Ammo_type.bullets:100, 
 								Ammo_type.cal50:80, 
-								Ammo_type.rockets:50} 
+								Ammo_type.rockets:50
+								} 
 
 		self.caliber_power ={Ammo_type.bullets: 1,
 							Ammo_type.cal50: 5, 
-							Ammo_type.rockets: 10}
+							Ammo_type.rockets: 10
+							}
 
+		self.color = self.caliber_colors[self.caliber]
 		self.lifetime = self.caliber_lifetime[self.caliber]
 		self.power = self.caliber_power[self.caliber]
 		self.size = self.caliber_size[self.caliber]
+		self.speed = self.caliber_speed[self.caliber]
 
 	def move_bullet(self):
 
 		#ACCELERATE MOVEMENT VECTOR
-		self.movement = rl.Vector2(math.cos(self.angle),math.sin(self.angle)) * self.speed
+		self.movement = rl.Vector2(math.cos(self.angle),math.sin(self.angle)) 
 		
 		#UPDATE POSITION
-		self.position += self.movement 
+		self.position += self.movement * self.speed
 
 		#LIMIT TO A MAXIMUM SPEED
 		rl.vector2_clamp(self.movement,-global_max_speed,global_max_speed)
 
+	def determine_particle(self):
+
+		if self.caliber == Ammo_type.rockets:
+			new_explosion = ExplosionParticles(self.position,None,self.player.angle,self.world)
+			self.world.object_list.append(new_explosion)	
+
+		if self.caliber == Ammo_type.bullets:
+			new_blood = BloodParticles(self.position,None,self.player.angle,self.world)
+			self.world.object_list.append(new_blood)	
+
+		if self.caliber == Ammo_type.cal50:
+			new_sparks = SparkParticles(self.position,None,self.player.angle,self.world)
+			self.world.object_list.append(new_sparks)	
+	
+
 	def draw(self):
 
-		rl.draw_circle_v(self.position,self.caliber_size[self.caliber],self.caliber_colors[self.caliber])
+		rl.draw_circle_v(self.position,self.caliber_size[self.caliber],self.color)
 
 	def update(self,group):
 
-		self.move_bullet()
-		self.draw()
+		if self.lifetime > 0:
+
+			self.move_bullet()
+			self.draw()
+			self.lifetime -= 1
+		else:
+			
+			self.world.object_list.remove(self)
+		
 
 class Enemy:
 
@@ -371,7 +423,7 @@ class Enemy:
 						}
 
 		if enemy_type not in self.type_data:
-			raise ValueError(f"Tipo de enemigo {enemy_type} no reconocido.")
+			raise ValueError(f"Enemy type {enemy_type} not recognized.")
 
 
 		self.state = Enemy_state.idle
@@ -420,6 +472,7 @@ class Enemy:
 						self.hp -= obj.power
 						new_damage_mgs = DamageMessage(f"-{obj.power}",obj.position)
 						self.gui.messages.append(new_damage_mgs)
+						obj.determine_particle()
 						group.remove(obj) #METER ANIMACION BONITA AKI
 		
 		else:
@@ -522,6 +575,166 @@ class DamageMessage(MessagePickup):
 		super().__init__(text,init_position)
 		self.color = rl.Color(200,10,10,255)
 
+class Particle:
+
+	def __init__(self,init_pos,size,color,angle,world):
+
+		self.position = init_pos
+		self.world = world
+		self.radius = size
+		self.color = color
+		
+		self.angle = angle
+		self.speed = randrange(1,4)
+		self.life = randrange(100,200)
+		self.color.a = self.life
+		self.movement = rl.Vector2(math.cos(radians(self.angle)),math.sin(radians(self.angle)))
+		
+
+	def draw(self):
+
+		rl.draw_circle_v(self.position,self.radius,self.color)
+
+
+	def update(self,group):
+
+		if self.life > 0:
+			
+			self.color.a -= 1 
+			self.position += self.movement * self.speed
+			self.draw()
+			self.life -= 1
+
+		else:
+			self.world.object_list.remove(self)
+
+class Emitter:
+
+	def __init__(self,position,angle,particle_amount,time,sizes,colors,world):
+		
+		self.position = position
+		self.angle = angle
+		#print(f"angle: {self.angle}")
+		self.particle_amount = particle_amount
+		self.init_timer = randrange(time[0],time[1])
+		self.timer = 1
+		self.sizes = sizes
+		self.colors = colors
+		self.world = world
+
+	def generate(self):
+		
+		if self.timer > 0:
+			self.timer -= 1
+		else:
+			if self.particle_amount > 0:
+				random_size = randrange(self.sizes[0],self.sizes[1])
+				random_color = choice(self.colors)
+				new_particle = Particle(self.position,random_size,random_color,self.angle,self.world)
+				self.world.object_list.append(new_particle)
+				self.timer = self.init_timer
+			else:
+				print("se eliminó un emitter")
+				self.world.object_list.remove(self)
+
+	def update(self,group):
+
+		self.generate()
+		rl.draw_circle_v(self.position,30,rl.LIGHTGRAY)
+
+
+class ParticleEmitter:
+
+	def __init__(self,init_position,color,original_angle,world):
+
+		self.position = init_position
+		self.color = None
+		self.world = world
+		self.type = None
+		self.emitters_amount = 16
+		self.angle_offset = 360/self.emitters_amount
+
+		self.amount_ranges = {"blood": (5,10),
+							"sparks":(1,5),
+							"explosion":(1,3)}
+
+		self.size_ranges = {"blood": (1,5),
+							"sparks":(1,3),
+							"explosion":(5,10)}
+		
+		self.color_ranges = {"blood": [RED_1,RED_2,RED_3, RED_4],
+							"sparks":[rl.WHITE,rl.YELLOW],
+							"explosion":[ORANGE_1,ORANGE_2,rl.GRAY,rl.LIGHTGRAY]}
+
+		self.life_ranges = {"blood": (100,150),
+							"sparks":(200,255),
+							"explosion": (5,50)}
+
+		self.main_angle = (original_angle +180) % 360 #INVERTING THE ORIGINAL ANGLE WITH MODIUULOOO
+
+
+	def create_emitters(self):
+
+		angle_add = 0
+		
+		for number in range(self.emitters_amount):
+			
+			random_amount = randrange(self.amount_ranges[self.type][0],self.amount_ranges[self.type][1])
+			new_emitter = Emitter(self.position,self.main_angle+angle_add,random_amount,self.life_ranges[self.type],self.size_ranges[self.type],self.color_ranges[self.type],self.world)
+			self.world.object_list.append(new_emitter)
+			angle_add += self.angle_offset
+
+
+
+	def update(self,group):
+		rl.draw_circle_v(self.position,50,rl.Color(200,200,0,100))
+		
+
+	def draw(self):
+
+		pass
+
+
+class ExplosionParticles(ParticleEmitter):
+
+	def __init__(self, init_position, color, original_angle,world):
+		super().__init__(init_position, color, original_angle,world)
+
+		self.emitters_amount = 8 
+		self.type = "explosion"
+		
+		print(f"creado un {self.type}")
+
+		self.create_emitters()
+
+		
+
+
+class BloodParticles(ParticleEmitter):
+
+	def __init__(self, init_position, color, original_angle, world):
+		super().__init__(init_position, color, original_angle, world)
+
+		self.emitters_amount = 5
+		self.angle_offset = 30/self.emitters_amount
+		self.type = "blood"
+		print(f"creado un {self.type}")
+
+		self.create_emitters()
+
+
+
+class SparkParticles(ParticleEmitter):
+
+	def __init__(self, init_position, color, original_angle, world):
+		super().__init__(init_position, color, original_angle, world)
+
+		self.emitters_amount = 3
+		self.angle_offset = 15/3
+		self.type = "sparks"
+		print(f"creado un {self.type}")
+
+		self.create_emitters()
 
 class Ammo_pup:
 
