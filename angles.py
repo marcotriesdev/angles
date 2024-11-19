@@ -51,26 +51,36 @@ rl.set_target_fps(60)
 
 class World:
 
-	def __init__(self,init_objects):
+	def __init__(self):
 
-		self.object_list = init_objects
+		self.object_list = []
 
 	def add_objects(self,objects: list)->None:
 
 		for object in objects:
+			print(f"added {object}")
 			self.object_list.append(object)
+
+	def remove_objects(self,objects: list)->None:
+
+		for object in objects:
+			print(f"removed {object}")
+			self.object_list.remove(object)
 
 	def world_update(self):
 
-		for object in self.object_list:
-			object.update(self.object_list)
+		if self.object_list:
+			for object in self.object_list:
+				object.update()
+
+world = World()
 
 class AmmoGenerator:
-
-	def __init__(self,bullets,cal50,rockets,world):
+	global world
+	def __init__(self,bullets,cal50,rockets):
 
 		self.amounts = {Ammo_type.bullets: bullets,Ammo_type.cal50: cal50, Ammo_type.rockets: rockets}
-		self.world = world
+
 
 	def generate(self,ammo_type):
 
@@ -78,31 +88,30 @@ class AmmoGenerator:
 			newx = randrange(0,SCREEN_WIDTH,1)
 			newy = randrange(0,SCREEN_HEIGHT,1)
 			new_ammo = Ammo_pup(ammo_type,rl.Vector2(newx,newy))
-			self.world.object_list.append(new_ammo)
+			world.object_list.append(new_ammo)
 
 
 class EnemyGenerator:
-
-	def __init__(self,small,mid,big,boss,world,gui):
+	global world
+	def __init__(self,small,mid,big,boss):
 
 		self.amounts = {Enemy_type.small: small, Enemy_type.medium: mid, Enemy_type.big: big, Enemy_type.boss: boss}
-		self.world = world
-		self.gui = gui
+	
 
 	def generate(self,enemy_type):
 
 		for amt in range (self.amounts[enemy_type]):
 			newx = randrange(0,SCREEN_WIDTH)
 			newy = randrange(0,SCREEN_HEIGHT)
-			new_enemy = Enemy(rl.Vector2(newx,newy),enemy_type,self.gui)
-			self.world.object_list.append(new_enemy)
+			new_enemy = Enemy(rl.Vector2(newx,newy),enemy_type)
+			world.add_objects([new_enemy])
 
 
 
 class Player:
-	
-	def __init__(self, init_position: rl.Vector2, init_angle: float, init_color,world) -> None:
-          
+	global world
+	def __init__(self, init_position: rl.Vector2, init_angle: float, init_color):
+        
 		self.position: rl.Vector2 = init_position
 		self.angle: float = init_angle
 		self.size: int = 30
@@ -114,7 +123,7 @@ class Player:
 		self.max_speed = 10
 		self.rotation_speed = 3
 		self.weapons = [Ammo_type.bullets,Ammo_type.cal50,Ammo_type.rockets]
-		self.world = world
+
 
 		self.ammo = {Ammo_type.bullets:100,Ammo_type.cal50:50,Ammo_type.rockets:5}
 		self.ammo_per_type = {Ammo_type.bullets:[25,0,0],Ammo_type.cal50:[0,10,0],Ammo_type.rockets:[0,0,1]}
@@ -169,8 +178,9 @@ class Player:
 
 		if rl.is_key_pressed(rl.KEY_SPACE):
 			if self.ammo[self.weapon_selector] > 0:
-				new_bullet = Bullet(self.position,self.movement,self,self.weapon_selector,self.world)
-				self.world.add_objects([new_bullet])
+				new_bullet = Bullet(self.position,self.movement,self,self.weapon_selector)
+				world.add_objects([new_bullet])
+				(f"{world.object_list}")
 				self.ammo[self.weapon_selector] -= 1
 
 	def speed_friction(self):
@@ -224,9 +234,9 @@ class Player:
 		
 		return self.movement * self.speed
 
-	def collision_ammo(self,group):
+	def collision_ammo(self):
 
-		
+		group = world.object_list
 
 		for object in group:
 			if hasattr(object,"rect"):
@@ -235,7 +245,7 @@ class Player:
 						self.receive_ammo(self.ammo_per_type[object.type])
 						object.open = True
 						new_message = MessagePickup(self.ammo_messages[object.type],object.position)
-						self.messages.append(new_message)
+						world.add_objects([new_message])
 
 
 	def update_children(self):
@@ -249,7 +259,7 @@ class Player:
 		
 		
 
-	def update(self,group):
+	def update(self):
         
 		self.speed_friction()
 		self.position += self.input()
@@ -257,7 +267,7 @@ class Player:
 		self.draw()
 		self.update_children()
 		self.input_attack()
-		self.collision_ammo(group)
+		self.collision_ammo()
 		
 
 
@@ -295,12 +305,10 @@ class Linesofplayer:
 		self.draw()
 
 class Bullet:
-
-	def __init__(self,init_position,parent_movement,player,caliber,world):
+	global world
+	def __init__(self,init_position,parent_movement,player,caliber):
 
 		self.player = player
-		self.world = world
-
 		
 		self.movement = parent_movement
 		self.angle = math.radians(player.angle)
@@ -354,23 +362,25 @@ class Bullet:
 	def determine_particle(self):
 
 		if self.caliber == Ammo_type.rockets:
-			new_explosion = ExplosionParticles(self.position,None,self.player.angle,self.world)
-			self.world.object_list.append(new_explosion)	
+			new_explosion = ExplosionParticles(self.position,None,self.player.angle)
+			world.add_objects([new_explosion])	
 
 		if self.caliber == Ammo_type.bullets:
-			new_blood = BloodParticles(self.position,None,self.player.angle,self.world)
-			self.world.object_list.append(new_blood)	
+			new_blood = BloodParticles(self.position,None,self.player.angle)
+			world.add_objects([new_blood])
 
 		if self.caliber == Ammo_type.cal50:
-			new_sparks = SparkParticles(self.position,None,self.player.angle,self.world)
-			self.world.object_list.append(new_sparks)	
+			new_sparks = SparkParticles(self.position,None,self.player.angle)
+			world.add_objects([new_sparks])	
+
+		world.remove_objects([self])
 	
 
 	def draw(self):
 
 		rl.draw_circle_v(self.position,self.caliber_size[self.caliber],self.color)
 
-	def update(self,group):
+	def update(self):
 
 		if self.lifetime > 0:
 
@@ -378,15 +388,13 @@ class Bullet:
 			self.draw()
 			self.lifetime -= 1
 		else:
-			
-			self.world.object_list.remove(self)
+			print(f"removed bullet {self.caliber}")
+			world.remove_objects([self])
 		
-
 class Enemy:
+	global world
+	def __init__(self,init_position,enemy_type):
 
-	def __init__(self,init_position,enemy_type,gui):
-
-		self.gui = gui
 		self.position = init_position
 		self.type_data ={Enemy_type.small: {
 							"hp": 10,
@@ -463,7 +471,9 @@ class Enemy:
 			case Enemy_state.attack:
 				self.attack_behavior()
 
-	def check_collision(self,group):
+	def check_collision(self):
+
+		group = world.object_list
 
 		if self.hp > 0:
 			for obj in group:
@@ -471,9 +481,9 @@ class Enemy:
 					if rl.check_collision_circles(self.position,self.size,obj.position,obj.size):
 						self.hp -= obj.power
 						new_damage_mgs = DamageMessage(f"-{obj.power}",obj.position)
-						self.gui.messages.append(new_damage_mgs)
+						world.add_objects([new_damage_mgs])
 						obj.determine_particle()
-						group.remove(obj) #METER ANIMACION BONITA AKI
+						 #METER ANIMACION BONITA AKI
 		
 		else:
 			print(f"murió un {self.type} salvaje")
@@ -490,20 +500,20 @@ class Enemy:
 	def chasing_behavior(self):
 		pass
 
+
 	def attack_behavior(self):
 		pass
 
-	
 
 	def draw(self):
 
 		rl.draw_circle_v(self.position,self.size,self.color)
 
-	def update(self, group):
+	def update(self):
 
 		self.timer_function()
 		self.select_behavior()
-		self.check_collision(group)
+		self.check_collision()
 		self.draw()
 
 
@@ -515,7 +525,7 @@ class GUI:
 		self.weapon_box = {Ammo_type.bullets:rl.Rectangle(158,51,250,23), 
 							Ammo_type.cal50:rl.Rectangle(158,82,250,23),
 								Ammo_type.rockets:rl.Rectangle(158,112,250,23)}
-		self.messages = []
+
 
 	def draw_hud(self):
 
@@ -528,24 +538,15 @@ class GUI:
 	
 	def update(self):
 
-		self.messages = self.player.messages
-
-		for msg in self.messages:
-			if msg.active:
-				msg.update()
-			else:
-				self.player.messages.remove(msg)
-			
-
 		self.draw_hud()
 
 
 class MessagePickup:
 
-	def __init__(self,text,init_position):
+	def __init__(self,text,position):
 
 		self.text = text
-		self.position = init_position
+		self.position = position
 		self.color = rl.Color(10,100,10,255)
 		self.active = True
 
@@ -555,7 +556,7 @@ class MessagePickup:
 			self.color.a -= 2
 			self.position.y -= 0.5
 		else:
-			self.active = False
+			world.remove_objects([self])
 
 	def draw(self):
 
@@ -569,18 +570,17 @@ class MessagePickup:
 
 
 class DamageMessage(MessagePickup):
-
+	global world
 	def __init__(self,text,init_position):
 
 		super().__init__(text,init_position)
 		self.color = rl.Color(200,10,10,255)
 
 class Particle:
-
-	def __init__(self,init_pos,size,color,angle,world):
+	global world
+	def __init__(self,init_pos,size,color,angle):
 
 		self.position = init_pos
-		self.world = world
 		self.radius = size
 		self.color = color
 		
@@ -596,7 +596,7 @@ class Particle:
 		rl.draw_circle_v(self.position,self.radius,self.color)
 
 
-	def update(self,group):
+	def update(self):
 
 		if self.life > 0:
 			
@@ -606,50 +606,16 @@ class Particle:
 			self.life -= 1
 
 		else:
-			self.world.object_list.remove(self)
-
-class Emitter:
-
-	def __init__(self,position,angle,particle_amount,time,sizes,colors,world):
-		
-		self.position = position
-		self.angle = angle
-		#print(f"angle: {self.angle}")
-		self.particle_amount = particle_amount
-		self.init_timer = randrange(time[0],time[1])
-		self.timer = 1
-		self.sizes = sizes
-		self.colors = colors
-		self.world = world
-
-	def generate(self):
-		
-		if self.timer > 0:
-			self.timer -= 1
-		else:
-			if self.particle_amount > 0:
-				random_size = randrange(self.sizes[0],self.sizes[1])
-				random_color = choice(self.colors)
-				new_particle = Particle(self.position,random_size,random_color,self.angle,self.world)
-				self.world.object_list.append(new_particle)
-				self.timer = self.init_timer
-			else:
-				print("se eliminó un emitter")
-				self.world.object_list.remove(self)
-
-	def update(self,group):
-
-		self.generate()
-		rl.draw_circle_v(self.position,30,rl.LIGHTGRAY)
+			world.object_list.remove(self)
 
 
 class ParticleEmitter:
+	global world
+	def __init__(self,init_position,color,original_angle):
 
-	def __init__(self,init_position,color,original_angle,world):
 
-		self.position = init_position
+		self.position = rl.Vector2(init_position.x, init_position.y)
 		self.color = None
-		self.world = world
 		self.type = None
 		self.emitters_amount = 16
 		self.angle_offset = 360/self.emitters_amount
@@ -673,68 +639,65 @@ class ParticleEmitter:
 		self.main_angle = (original_angle +180) % 360 #INVERTING THE ORIGINAL ANGLE WITH MODIUULOOO
 
 
-	def create_emitters(self):
+	def create_particles(self):
 
 		angle_add = 0
 		
 		for number in range(self.emitters_amount):
 			
-			random_amount = randrange(self.amount_ranges[self.type][0],self.amount_ranges[self.type][1])
-			new_emitter = Emitter(self.position,self.main_angle+angle_add,random_amount,self.life_ranges[self.type],self.size_ranges[self.type],self.color_ranges[self.type],self.world)
-			self.world.object_list.append(new_emitter)
-			angle_add += self.angle_offset
+			pass
 
+	def update(self):
 
-
-	def update(self,group):
-		rl.draw_circle_v(self.position,50,rl.Color(200,200,0,100))
+		self.draw()
+		
 		
 
 	def draw(self):
 
-		pass
-
+		rl.draw_circle_lines_v(self.position,50,rl.Color(200,200,0,100))
+		#rl.draw_text(str(self.position),self.position.x,self.position.y,20,rl.BLACK)
 
 class ExplosionParticles(ParticleEmitter):
 
-	def __init__(self, init_position, color, original_angle,world):
-		super().__init__(init_position, color, original_angle,world)
+	def __init__(self, init_position, color, original_angle):
+		super().__init__(init_position, color, original_angle)
 
 		self.emitters_amount = 8 
 		self.type = "explosion"
 		
 		print(f"creado un {self.type}")
 
-		self.create_emitters()
+		self.create_particles()
 
 		
 
 
 class BloodParticles(ParticleEmitter):
 
-	def __init__(self, init_position, color, original_angle, world):
-		super().__init__(init_position, color, original_angle, world)
+	def __init__(self, init_position, color, original_angle):
+		super().__init__(init_position, color, original_angle)
 
 		self.emitters_amount = 5
 		self.angle_offset = 30/self.emitters_amount
 		self.type = "blood"
 		print(f"creado un {self.type}")
 
-		self.create_emitters()
+		self.create_particles()
 
 
 
 class SparkParticles(ParticleEmitter):
 
-	def __init__(self, init_position, color, original_angle, world):
-		super().__init__(init_position, color, original_angle, world)
+	def __init__(self, init_position, color, original_angle):
+		super().__init__(init_position, color, original_angle)
 
 		self.emitters_amount = 3
 		self.angle_offset = 15/3
 		self.type = "sparks"
 		print(f"creado un {self.type}")
 
-		self.create_emitters()
+		self.create_particles()
 
 class Ammo_pup:
 
@@ -762,19 +725,18 @@ class Ammo_pup:
 		else:	
 			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,self.colors[self.type])
 
-	def update(self,group):
+	def update(self):
 
 		self.draw()
 
 
-game_world = World([])
-player1 = Player(rl.Vector2(200,300),0,rl.GREEN,game_world)
+player1 = Player(rl.Vector2(200,300),0,rl.GREEN)
 
-game_world.add_objects([player1])
+world.add_objects([player1])
 
 game_gui  = GUI(player1)
-ammo_gen = AmmoGenerator(10,8,5,game_world)
-enemy_gen = EnemyGenerator(10,10,5,0,game_world,game_gui)
+ammo_gen = AmmoGenerator(10,8,5)
+enemy_gen = EnemyGenerator(10,10,5,0)
 
 ammo_gen.generate(Ammo_type.bullets)
 ammo_gen.generate(Ammo_type.cal50)
@@ -794,7 +756,7 @@ while not rl.window_should_close():
 	rl.begin_drawing()
 	rl.clear_background(rl.RAYWHITE)
 
-	game_world.world_update()
+	world.world_update()
 	game_gui.update()
 
 	
