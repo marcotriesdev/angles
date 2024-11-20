@@ -3,6 +3,7 @@ import math
 from math import radians
 from enum import Enum
 from random import randrange, choice
+from sound_manager import SoundManager
 
 print(rl.RAYLIB_VERSION)
 #CAMBIO DE PRUEBA
@@ -40,9 +41,10 @@ RED_2 = rl.Color(255,15,0)
 RED_3 = rl.Color(255,10,6)
 RED_4 = rl.Color(200,0,0)
 
-ORANGE_1 = rl.Color(255,200,0)
-ORANGE_2 = rl.Color(210,170,5)
-
+ORANGE_1 = rl.Color(255,200,0,200)
+ORANGE_2 = rl.Color(210,170,5,200)
+GRAY_1 = rl.Color(150,150,150,150)
+GRAY_2 = rl.Color(120,120,120,150)
 
 
 
@@ -73,7 +75,11 @@ class World:
 			for object in self.object_list:
 				object.update()
 
+#CREACION DE SINGLETONS
+
 world = World()
+sounds = SoundManager()
+
 
 class AmmoGenerator:
 	global world
@@ -289,7 +295,6 @@ class Linesofplayer:
 		self.point2.x = (self.length * math.cos(self.angle+self.parent_angle)) + self.parent.position.x
 		self.point2.y = (self.length * math.sin(self.angle+self.parent_angle)) + self.parent.position.y
 
-
 	def draw(self):
 
 		rl.draw_line_ex(self.point1,self.point2, self.thic, self.color)
@@ -363,15 +368,24 @@ class Bullet:
 
 		if self.caliber == Ammo_type.rockets:
 			new_explosion = ExplosionParticles(self.position,None,self.player.angle)
-			world.add_objects([new_explosion])	
+			new_blood1 = BloodParticles(self.position,None,self.player.angle)
+			new_blood2 = BloodParticles(self.position,None,self.player.angle+30)
+			new_blood3 = BloodParticles(self.position,None,self.player.angle+60)
+			new_blood4 = BloodParticles(self.position,None,self.player.angle-60)
+			sounds.play_sound(sounds.explosion_sound)
+			world.add_objects([new_explosion,new_blood1,new_blood2,new_blood3,new_blood4])	
 
 		if self.caliber == Ammo_type.bullets:
 			new_blood = BloodParticles(self.position,None,self.player.angle)
+			sounds.play_sound(sounds.ak47_sound)
 			world.add_objects([new_blood])
 
 		if self.caliber == Ammo_type.cal50:
 			new_sparks = SparkParticles(self.position,None,self.player.angle)
-			world.add_objects([new_sparks])	
+			new_blood1 = BloodParticles(self.position,None,self.player.angle+20)
+			new_blood2 = BloodParticles(self.position,None,self.player.angle+20)
+			sounds.play_sound(sounds.cal50_sound)
+			world.add_objects([new_sparks,new_blood1,new_blood2])	
 
 		world.remove_objects([self])
 	
@@ -576,17 +590,99 @@ class DamageMessage(MessagePickup):
 		super().__init__(text,init_position)
 		self.color = rl.Color(200,10,10,255)
 
+
+
+class ParticleEmitter:
+	global world
+	def __init__(self,init_position,color,original_angle):
+
+
+		self.position = rl.Vector2(init_position.x, init_position.y)
+		self.color = None
+		self.type = None
+		self.emitters_amount = 0
+		self.angle_offset = 0
+
+
+		self.amount_ranges = {"blood": (5,10),
+							"sparks":(1,5),
+							"explosion":(1,3)}
+
+		self.size_ranges = {"blood": (2,8),
+							"sparks":(2,3),
+							"explosion":(10,20)}
+		
+		self.color_ranges = {"blood": [RED_1,RED_2,RED_3, RED_4],
+							"sparks":[rl.MAGENTA,rl.YELLOW],
+							"explosion":[ORANGE_1,ORANGE_2,GRAY_1,GRAY_2]}
+
+		self.life_ranges = {"blood": [5,15],
+							"sparks":[5,10],
+							"explosion": [2,6]}
+
+		self.speed_ranges = {"blood": [5,15],
+							"sparks":[10,20],
+							"explosion": [5,10]}
+
+		self.timer = 1
+		self.timer_init = self.timer
+
+		self.main_angle = (original_angle +180) % 360 #INVERTING THE ORIGINAL ANGLE WITH MODIUULOOO
+
+	def _timer(self):
+
+		if self.timer < 0:
+			self.create_particles()
+			world.remove_objects([self])
+			
+		else:	
+			self.timer -= 1
+
+
+	def create_particles(self):
+
+		angle_add = 0
+		
+		for number in range(self.emitters_amount):
+			
+			new_particle = Particle(self.position,
+									self.size_ranges[self.type],
+									self.color_ranges[self.type],
+									self.main_angle+angle_add,
+									self.speed_ranges[self.type],
+									self.life_ranges[self.type])
+
+			world.add_objects([new_particle])
+
+			angle_add += self.angle_offset
+
+
+
+			
+
+	def update(self):
+
+		self._timer()
+		self.draw()
+		
+		
+
+	def draw(self):
+
+		rl.draw_circle_lines_v(self.position,50,rl.Color(200,200,0,100))
+		rl.draw_text(str(self.life),self.position.x,self.position.y,20,rl.BLACK)
+
 class Particle:
 	global world
-	def __init__(self,init_pos,size,color,angle):
+	def __init__(self,init_pos,size,color,angle,speed,life):
 
-		self.position = init_pos
-		self.radius = size
-		self.color = color
+		self.position = rl.Vector2(init_pos.x,init_pos.y)
+		self.radius = randrange(size[0],size[1])
+		self.color = choice(color)
 		
 		self.angle = angle
-		self.speed = randrange(1,4)
-		self.life = randrange(100,200)
+		self.speed = randrange(speed[0],speed[1])
+		self.life = randrange(life[0],life[1])
 		self.color.a = self.life
 		self.movement = rl.Vector2(math.cos(radians(self.angle)),math.sin(radians(self.angle)))
 		
@@ -606,71 +702,23 @@ class Particle:
 			self.life -= 1
 
 		else:
-			world.object_list.remove(self)
+			world.remove_objects([self])
 
-
-class ParticleEmitter:
-	global world
-	def __init__(self,init_position,color,original_angle):
-
-
-		self.position = rl.Vector2(init_position.x, init_position.y)
-		self.color = None
-		self.type = None
-		self.emitters_amount = 16
-		self.angle_offset = 360/self.emitters_amount
-
-		self.amount_ranges = {"blood": (5,10),
-							"sparks":(1,5),
-							"explosion":(1,3)}
-
-		self.size_ranges = {"blood": (1,5),
-							"sparks":(1,3),
-							"explosion":(5,10)}
-		
-		self.color_ranges = {"blood": [RED_1,RED_2,RED_3, RED_4],
-							"sparks":[rl.WHITE,rl.YELLOW],
-							"explosion":[ORANGE_1,ORANGE_2,rl.GRAY,rl.LIGHTGRAY]}
-
-		self.life_ranges = {"blood": (100,150),
-							"sparks":(200,255),
-							"explosion": (5,50)}
-
-		self.main_angle = (original_angle +180) % 360 #INVERTING THE ORIGINAL ANGLE WITH MODIUULOOO
-
-
-	def create_particles(self):
-
-		angle_add = 0
-		
-		for number in range(self.emitters_amount):
-			
-			pass
-
-	def update(self):
-
-		self.draw()
-		
-		
-
-	def draw(self):
-
-		rl.draw_circle_lines_v(self.position,50,rl.Color(200,200,0,100))
-		#rl.draw_text(str(self.position),self.position.x,self.position.y,20,rl.BLACK)
 
 class ExplosionParticles(ParticleEmitter):
 
 	def __init__(self, init_position, color, original_angle):
 		super().__init__(init_position, color, original_angle)
 
-		self.emitters_amount = 8 
+		self.emitters_amount = 16 
+		self.angle_offset = 360/self.emitters_amount
 		self.type = "explosion"
-		
-		print(f"creado un {self.type}")
+		self.life = randrange(self.life_ranges[self.type][0],
+								self.life_ranges[self.type][1])
+
+		self.timer = 20
 
 		self.create_particles()
-
-		
 
 
 class BloodParticles(ParticleEmitter):
@@ -681,10 +729,12 @@ class BloodParticles(ParticleEmitter):
 		self.emitters_amount = 5
 		self.angle_offset = 30/self.emitters_amount
 		self.type = "blood"
-		print(f"creado un {self.type}")
+		self.life = randrange(self.life_ranges[self.type][0],
+								self.life_ranges[self.type][1])
+
+		self.timer = 5
 
 		self.create_particles()
-
 
 
 class SparkParticles(ParticleEmitter):
@@ -695,7 +745,10 @@ class SparkParticles(ParticleEmitter):
 		self.emitters_amount = 3
 		self.angle_offset = 15/3
 		self.type = "sparks"
-		print(f"creado un {self.type}")
+		self.life = randrange(self.life_ranges[self.type][0],
+								self.life_ranges[self.type][1])
+
+		self.timer = 3
 
 		self.create_particles()
 
