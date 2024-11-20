@@ -32,6 +32,7 @@ class Enemy_state(Enum):
 	idle = 1
 	chasing = 2
 	attack = 3
+	dead = 4 
 
 
 #COLORS
@@ -409,13 +410,13 @@ class Enemy:
 	global world
 	def __init__(self,init_position,enemy_type):
 
-		self.position = init_position
+		self.position = rl.Vector2(init_position.x,init_position.y)
 		self.type_data ={Enemy_type.small: {
 							"hp": 10,
 							"color":rl.Color(150,190,150,255),
 							"atk":5,
 							"size":30,
-							"range_radius":50,
+							"range_radius":70,
 							"speed":2
 							},
 						Enemy_type.medium: {
@@ -423,7 +424,7 @@ class Enemy:
 							"color":rl.Color(140,140,120,255),
 							"atk":8,
 							"size":32,
-							"range_radius":50,
+							"range_radius":85,
 							"speed":4
 							},
 						Enemy_type.big: {
@@ -431,7 +432,7 @@ class Enemy:
 							"color":rl.Color(150,100,100,255),
 							"atk":20,
 							"size":40,
-							"range_radius":25,
+							"range_radius":80,
 							"speed":5
 							},
 						Enemy_type.boss: {
@@ -439,7 +440,7 @@ class Enemy:
 							"color":rl.Color(50,15,15,255),
 							"atk":15,
 							"size":50,
-							"range_radius":80,
+							"range_radius":100,
 							"speed":5
 							}
 						}
@@ -454,13 +455,18 @@ class Enemy:
 		self.color = self.type_data[self.type]       ["color"]
 		self.atk = self.type_data[self.type]         ["atk"]
 		self.size = self.type_data[self.type]        ["size"]
-		self.range_radius = self.type_data[self.type]["range_radius"]
-		self.speed = self.type_data[self.type]       ["speed"]
+		self.range_radius = self.type_data[self.type]["range_radius"] # 50 - 50 - 25 - 80 
+		self.speed = self.type_data[self.type]       ["speed"] * 0.4  
+
 
 		self.shield = False
+		self.target = None
 
-		self.initial_timer = 50
+		self.initial_timer = choice([50,120])
 		self.timer = self.initial_timer
+
+		self.direction_value = choice([1,-1])
+		self.direction = choice(["x","y"])
 
 
 
@@ -469,7 +475,7 @@ class Enemy:
 		if self.timer > 0:
 			self.timer -= 1
 		else:
-			self.timer = 50
+			self.timer =  choice([50,120])
 	
 
 	def select_behavior(self):
@@ -503,16 +509,42 @@ class Enemy:
 			print(f"murió un {self.type} salvaje")
 			group.remove(self)
 					
+	def check_sight(self):
 
+		group = world.object_list
+
+		if self.hp > 0:
+			for player in group:
+				if hasattr(player,"weapon_selector"):
+					if rl.check_collision_circles(self.position,self.range_radius,player.position,player.size):
+						self.state = Enemy_state.chasing
+						self.target = player
 
 	def idle_behavior(self):
 
-		if self.timer == 1:
-			pass
+		
+		if self.timer > 0:
+
+			if self.direction == "x":
+				self.position.x += self.speed * self.direction_value
+
+			if self.direction == "y":
+				self.position.y += self.speed * self.direction_value
+			
+			self.timer -= 1
+
+		else:
+
+			self.direction_value = choice([1,-1])
+			self.direction = choice(["x","y"])
+			self.timer = self.initial_timer
+			
 		
 
 	def chasing_behavior(self):
-		pass
+		
+		self.position.x = rl.lerp(self.position.x,self.target.position.x,0.5)
+		self.position.y = rl.lerp(self.position.y,self.target.position.y,0.5)
 
 
 	def attack_behavior(self):
@@ -521,7 +553,11 @@ class Enemy:
 
 	def draw(self):
 
-		rl.draw_circle_v(self.position,self.size,self.color)
+		if self.state != Enemy_state.dead:
+			#rl.draw_circle_v(self.position,self.range_radius,rl.LIGHTGRAY)
+			rl.draw_circle_v(self.position,self.size,self.color)
+		else:
+			self.color.a = 200
 
 	def update(self):
 
@@ -789,7 +825,7 @@ world.add_objects([player1])
 
 game_gui  = GUI(player1)
 ammo_gen = AmmoGenerator(10,8,5)
-enemy_gen = EnemyGenerator(10,10,5,0)
+enemy_gen = EnemyGenerator(5,4,2,0)
 
 ammo_gen.generate(Ammo_type.bullets)
 ammo_gen.generate(Ammo_type.cal50)
