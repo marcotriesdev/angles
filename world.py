@@ -5,6 +5,8 @@ class World:
 		self.debug : bool = debug
 		self.object_list = []
 		self.decal_list = []
+		self.background_decals = []
+		self.hud_list = []
 
 	def add_objects(self,objects: list)->None:
 
@@ -18,6 +20,15 @@ class World:
 			#print(f"added {decal}")
 			self.decal_list.append(decal)
 
+	def add_background_decals(self,bdecals) -> None:
+
+		for decal in bdecals:
+			self.background_decals.append(decal)
+
+	def add_hud(self,hud):
+
+		self.hud_list.append(hud)
+
 	def remove_objects(self,objects: list)->None:
 
 		for object in objects:
@@ -26,6 +37,10 @@ class World:
 
 	def world_update(self): #IMPORTANTE EN EL ORDEN DEL DIBUJADO
 		
+		if self.background_decals:
+			for decal in self.background_decals:
+				decal.update()
+
 		if self.decal_list:
 			for decal in self.decal_list:
 				decal.update()
@@ -35,3 +50,8 @@ class World:
 				object.update()
 				if hasattr(object,"debug") and self.debug:
 					object.debug()
+
+		if self.object_list:
+
+			for hud in self.hud_list:
+				hud.update()

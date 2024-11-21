@@ -22,11 +22,14 @@ from enums import *
 rl.set_target_fps(60)
 
 
-#CREACION DE SINGLETONS
+#region CREACION DE SINGLETONS
 
-world = World(False)
+world = World(True)
 sounds = SoundManager()
 
+#endregion
+
+#region GENERATORS
 
 class AmmoGenerator:
 	global world
@@ -59,7 +62,10 @@ class EnemyGenerator:
 			new_enemy = Enemy(rl.Vector2(newx,newy),enemy_type)
 			world.add_objects([new_enemy])
 
+# endregion
+ 
 
+# region GAME OBJECTS
 
 class Player:
 	global world
@@ -256,182 +262,7 @@ class Linesofplayer:
 
 		self.draw()
 
-class Explosion:
-	global world
-	def __init__(self,position: rl.Vector2,size: int,power: int,angle):
-		
-		self.position = rl.Vector2(position.x,position.y)
-		self.angle = angle
-		self.size = size
-		self.color = rl.Color(200,200,0,50)
-		self.power = power
-		self.explosion = True
-		self.timer = 100
-		self.deactivate = self.timer - 1
 
-	def update(self):
-
-		self.draw()
-
-		if self.timer > 0:
-			self.timer -= 1
-		else:
-			self.terminate_explosion()
-
-		if self.timer < self.deactivate:
-			self.explosion = False
-			
-
-	def draw(self):
-
-		if world.debug:
-			rl.draw_circle_v(self.position,self.size,self.color)
-
-	def terminate_explosion(self):
-
-		world.remove_objects([self])
-
-
-class Bloodstain:
-
-	def __init__(self,position,size):
-
-		self.position = rl.Vector2(position.x,position.y)
-		
-		self.size_h = uniform(size * 1.1,size* 1.5)
-		self.size_w = uniform(size * 1.1,size* 1.5) 
-		self.max_size_h = self.size_h *2.5
-		self.max_size_w = self.size_w * 2.5
-		self.grow_speed = uniform(0.05,0.3)
-		self.color = rl.Color(150,0,0,255)
-		self.shadow_color = rl.Color(120,0,0,255)
-		self.shine_color = rl.Color(180,0,0,255)
-
-
-
-	def grow_bloodstain(self):
-
-
-		self.size_h += self.grow_speed
-		self.size_w += self.grow_speed
-		
-		if self.size_h >= self.max_size_h:
-			self.size_h = self.max_size_h
-		if self.size_w >= self.max_size_w:
-			self.size_w = self.max_size_w
-
-	def draw(self):
-
-
-		rl.draw_ellipse(self.position.x-10,self.position.y+5,self.size_h,self.size_w,self.shine_color)
-		rl.draw_ellipse(self.position.x+10,self.position.y-5,self.size_h,self.size_w,self.shadow_color)
-		rl.draw_ellipse(self.position.x,self.position.y,self.size_h,self.size_w,self.color)
-
-	def update(self):
-
-		self.grow_bloodstain()
-		self.draw()
-
-class Bullet:
-	global world
-	def __init__(self,init_position,parent_movement,player,caliber):
-
-		self.player = player
-		
-		self.movement = parent_movement
-		self.angle = math.radians(player.angle)
-		self.offset = 10
-		self.position = init_position + rl.Vector2(math.cos(self.angle)*self.offset,math.sin(self.angle)*self.offset)
-		
-		self.caliber = caliber
-
-		self.caliber_colors = {Ammo_type.bullets:rl.BLACK,
-								Ammo_type.cal50:rl.GRAY,
-								Ammo_type.rockets:rl.DARKBROWN
-								}
-
-		self.caliber_size = {Ammo_type.bullets: 5,
-							Ammo_type.cal50: 10, 
-							Ammo_type.rockets: 25
-							}
-
-		self.caliber_speed = {Ammo_type.bullets: 25,
-							Ammo_type.cal50: 27, 
-							Ammo_type.rockets: 15
-							}
-
-		self.caliber_lifetime = {Ammo_type.bullets:100, 
-								Ammo_type.cal50:80, 
-								Ammo_type.rockets:50
-								} 
-
-		self.caliber_power ={Ammo_type.bullets: 2,
-							Ammo_type.cal50: 5, 
-							Ammo_type.rockets: 10
-							}
-
-		self.color = self.caliber_colors[self.caliber]
-		self.lifetime = self.caliber_lifetime[self.caliber]
-		self.power = self.caliber_power[self.caliber]
-		self.size = self.caliber_size[self.caliber]
-		self.speed = self.caliber_speed[self.caliber]
-
-	def move_bullet(self):
-
-		#ACCELERATE MOVEMENT VECTOR
-		self.movement = rl.Vector2(math.cos(self.angle),math.sin(self.angle)) 
-		
-		#UPDATE POSITION
-		self.position += self.movement * self.speed
-
-		#LIMIT TO A MAXIMUM SPEED
-		rl.vector2_clamp(self.movement,-global_max_speed,global_max_speed)
-
-	def determine_particle(self):
-
-		if self.caliber == Ammo_type.rockets:
-			new_explosion = ExplosionParticles(self.position,None,self.player.angle)
-			new_blood1 = BloodParticles(self.position,None,self.player.angle)
-			new_blood2 = BloodParticles(self.position,None,self.player.angle+30)
-			new_blood3 = BloodParticles(self.position,None,self.player.angle+60)
-			new_blood4 = BloodParticles(self.position,None,self.player.angle-60)
-
-			new_explosion = Explosion(self.position,200,5,self.angle)
-
-			sounds.play_sound(sounds.explosion_sound)
-			world.add_objects([new_explosion,new_blood1,new_blood2,new_blood3,new_blood4,new_explosion])	
-
-		if self.caliber == Ammo_type.bullets:
-			new_blood = BloodParticles(self.position,None,self.player.angle)
-			sounds.play_sound(sounds.ak47_sound)
-			world.add_objects([new_blood])
-
-		if self.caliber == Ammo_type.cal50:
-			new_sparks = SparkParticles(self.position,None,self.player.angle)
-			new_blood1 = BloodParticles(self.position,None,self.player.angle+20)
-			new_blood2 = BloodParticles(self.position,None,self.player.angle+20)
-			sounds.play_sound(sounds.cal50_sound)
-			world.add_objects([new_sparks,new_blood1,new_blood2])	
-
-		world.remove_objects([self])
-	
-
-	def draw(self):
-
-		rl.draw_circle_v(self.position,self.caliber_size[self.caliber],self.color)
-
-
-	def update(self):
-
-		if self.lifetime > 0:
-
-			self.move_bullet()
-			self.draw()
-			self.lifetime -= 1
-		else:
-			print(f"removed bullet {self.caliber}")
-			world.remove_objects([self])
-		
 class Enemy:
 	global world
 	def __init__(self,init_position,enemy_type):
@@ -442,7 +273,7 @@ class Enemy:
 							"color":rl.Color(150,190,150,255),
 							"atk":5,
 							"size":30,
-							"range_radius":70,
+							"range_radius":90,
 							"speed":2
 							},
 						Enemy_type.medium: {
@@ -450,7 +281,7 @@ class Enemy:
 							"color":rl.Color(140,140,120,255),
 							"atk":8,
 							"size":32,
-							"range_radius":85,
+							"range_radius":90,
 							"speed":4
 							},
 						Enemy_type.big: {
@@ -699,7 +530,145 @@ class Enemy:
 		self.draw()
 
 
-class GUI:
+class Bullet:
+	global world
+	def __init__(self,init_position,parent_movement,player,caliber):
+
+		self.player = player
+		
+		self.movement = parent_movement
+		self.angle = math.radians(player.angle)
+		self.offset = 10
+		self.position = init_position + rl.Vector2(math.cos(self.angle)*self.offset,math.sin(self.angle)*self.offset)
+		
+		self.caliber = caliber
+
+		self.caliber_colors = {Ammo_type.bullets:rl.BLACK,
+								Ammo_type.cal50:rl.GRAY,
+								Ammo_type.rockets:rl.DARKBROWN
+								}
+
+		self.caliber_size = {Ammo_type.bullets: 5,
+							Ammo_type.cal50: 10, 
+							Ammo_type.rockets: 25
+							}
+
+		self.caliber_speed = {Ammo_type.bullets: 25,
+							Ammo_type.cal50: 27, 
+							Ammo_type.rockets: 15
+							}
+
+		self.caliber_lifetime = {Ammo_type.bullets:100, 
+								Ammo_type.cal50:80, 
+								Ammo_type.rockets:50
+								} 
+
+		self.caliber_power ={Ammo_type.bullets: 2,
+							Ammo_type.cal50: 5, 
+							Ammo_type.rockets: 10
+							}
+
+		self.color = self.caliber_colors[self.caliber]
+		self.lifetime = self.caliber_lifetime[self.caliber]
+		self.power = self.caliber_power[self.caliber]
+		self.size = self.caliber_size[self.caliber]
+		self.speed = self.caliber_speed[self.caliber]
+
+	def move_bullet(self):
+
+		#ACCELERATE MOVEMENT VECTOR
+		self.movement = rl.Vector2(math.cos(self.angle),math.sin(self.angle)) 
+		
+		#UPDATE POSITION
+		self.position += self.movement * self.speed
+
+		#LIMIT TO A MAXIMUM SPEED
+		rl.vector2_clamp(self.movement,-global_max_speed,global_max_speed)
+
+	def determine_particle(self):
+
+		if self.caliber == Ammo_type.rockets:
+			new_explosion = ExplosionParticles(self.position,None,self.player.angle)
+			new_blood1 = BloodParticles(self.position,None,self.player.angle)
+			new_blood2 = BloodParticles(self.position,None,self.player.angle+30)
+			new_blood3 = BloodParticles(self.position,None,self.player.angle+60)
+			new_blood4 = BloodParticles(self.position,None,self.player.angle-60)
+
+			new_explosion = Explosion(self.position,200,5,self.angle)
+
+			sounds.play_sound(sounds.explosion_sound)
+			world.add_objects([new_blood1,new_blood2,new_blood3,new_blood4,new_explosion])	
+
+		if self.caliber == Ammo_type.bullets:
+			new_blood = BloodParticles(self.position,None,self.player.angle)
+			sounds.play_sound(sounds.ak47_sound)
+			world.add_objects([new_blood])
+
+		if self.caliber == Ammo_type.cal50:
+			new_sparks = SparkParticles(self.position,None,self.player.angle)
+			new_blood1 = BloodParticles(self.position,None,self.player.angle+20)
+			new_blood2 = BloodParticles(self.position,None,self.player.angle+20)
+			sounds.play_sound(sounds.cal50_sound)
+			world.add_objects([new_sparks,new_blood1,new_blood2])	
+
+		world.remove_objects([self])
+	
+
+	def draw(self):
+
+		rl.draw_circle_v(self.position,self.caliber_size[self.caliber],self.color)
+
+
+	def update(self):
+
+		if self.lifetime > 0:
+
+			self.move_bullet()
+			self.draw()
+			self.lifetime -= 1	
+		else:
+			print(f"removed bullet {self.caliber}")
+			if self.caliber == Ammo_type.rockets:
+				new_explosion = Explosion(self.position,200,5,self.angle)
+				world.add_objects([new_explosion])
+				sounds.play_sound(sounds.explosion_sound)
+			world.remove_objects([self])
+
+class Ammo_pup:
+
+	def __init__(self,type: Ammo_type,position):
+
+		self.type = type
+
+		self.open = False
+
+		self.position = position
+
+		self.rects = {Ammo_type.bullets:rl.Rectangle(self.position.x,self.position.y,30,50),
+						Ammo_type.cal50:rl.Rectangle(self.position.x,self.position.y,35,50),
+						Ammo_type.rockets:rl.Rectangle(self.position.x,self.position.y,40,80)}
+		self.colors = {Ammo_type.bullets:rl.Color(100,100,20,255),
+						Ammo_type.cal50:rl.Color(80,150,20,255),
+						Ammo_type.rockets:rl.Color(80,150,80,255)}
+		
+		self.rect = self.rects[self.type]
+
+	def draw(self):
+
+		if self.open:
+			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,rl.Color(100,100,100,100))
+		else:	
+			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,self.colors[self.type])
+
+	def update(self):
+
+		self.draw()
+
+#endregion
+
+#region GUI OBJECTS
+
+class HUD:
 
 	def __init__(self,player):
 
@@ -768,6 +737,9 @@ class GUI:
 		self.draw_background_hud()
 		self.draw_hud()
 
+#endregion
+
+#region VFX
 
 class MessagePickup:
 
@@ -805,6 +777,46 @@ class DamageMessage(MessagePickup):
 		self.color = rl.Color(200,10,10,255)
 
 
+class Explosion:
+	global world
+	def __init__(self,position: rl.Vector2,size: int,power: int,angle):
+		
+		self.position = rl.Vector2(position.x,position.y)
+		self.angle = angle
+		self.size = size
+		self.color = rl.Color(200,200,0,30)
+		self.power = power
+		self.explosion = True
+		self.timer = 100
+		self.deactivate = self.timer - 1
+
+		new_explosion_stain = Explosionstain(self.position)
+		world.add_background_decals([new_explosion_stain])
+
+	def update(self):
+
+		self.draw()
+
+		if self.timer > 0:
+			self.timer -= 1
+		else:
+			self.terminate_explosion()
+
+		if self.timer == self.deactivate:
+			self.explosion = False
+			
+
+	def draw(self):
+
+		if world.debug:
+			rl.draw_circle_v(self.position,self.size,self.color)
+
+	def terminate_explosion(self):
+
+		world.remove_objects([self])
+
+
+#region PARTICLES
 
 class ParticleEmitter:
 	global world
@@ -962,42 +974,88 @@ class SparkParticles(ParticleEmitter):
 
 		self.create_particles()
 
-class Ammo_pup:
+#endregion
 
-	def __init__(self,type: Ammo_type,position):
+# region DECALS
 
-		self.type = type
+class Bloodstain:
 
-		self.open = False
+	def __init__(self,position,size):
 
-		self.position = position
-
-		self.rects = {Ammo_type.bullets:rl.Rectangle(self.position.x,self.position.y,30,50),
-						Ammo_type.cal50:rl.Rectangle(self.position.x,self.position.y,35,50),
-						Ammo_type.rockets:rl.Rectangle(self.position.x,self.position.y,40,80)}
-		self.colors = {Ammo_type.bullets:rl.Color(100,100,20,255),
-						Ammo_type.cal50:rl.Color(80,150,20,255),
-						Ammo_type.rockets:rl.Color(80,150,80,255)}
+		self.position = rl.Vector2(position.x,position.y)
 		
-		self.rect = self.rects[self.type]
+		self.size_h = uniform(size * 1.1,size* 1.5)
+		self.size_w = uniform(size * 1.1,size* 1.5) 
+		self.max_size_h = self.size_h *2.5
+		self.max_size_w = self.size_w * 2.5
+		self.grow_speed = uniform(0.05,0.3)
+		self.color = rl.Color(150,0,0,255)
+		self.shadow_color = rl.Color(120,0,0,255)
+		self.shine_color = rl.Color(180,0,0,255)
+
+
+
+	def grow_bloodstain(self):
+
+
+		self.size_h += self.grow_speed
+		self.size_w += self.grow_speed
+		
+		if self.size_h >= self.max_size_h:
+			self.size_h = self.max_size_h
+		if self.size_w >= self.max_size_w:
+			self.size_w = self.max_size_w
 
 	def draw(self):
 
-		if self.open:
-			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,rl.Color(100,100,100,100))
-		else:	
-			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,self.colors[self.type])
+
+		rl.draw_ellipse(self.position.x-10,self.position.y+5,self.size_h,self.size_w,self.shine_color)
+		rl.draw_ellipse(self.position.x+10,self.position.y-5,self.size_h,self.size_w,self.shadow_color)
+		rl.draw_ellipse(self.position.x,self.position.y,self.size_h,self.size_w,self.color)
+
+	def update(self):
+
+		self.grow_bloodstain()
+		self.draw()
+
+class Explosionstain:
+
+	def __init__(self,position):
+
+		self.position = rl.Vector2(position.x,position.y)
+		self.color = rl.Color(20,10,0,50)
+		self.size_multiplier = uniform(1.2,2.5)
+		self.radiuses =[20,
+						25,
+						30,
+						35,
+						40,
+						45,
+						50]
+
+	def draw(self):
+
+		for radius in self.radiuses:
+
+			rl.draw_circle(self.position.x,
+							self.position.y,
+							radius*self.size_multiplier,
+							self.color)
 
 	def update(self):
 
 		self.draw()
 
+#endregion
+
+#region INIT GAME
 
 player1 = Player(rl.Vector2(200,300),0,rl.GREEN)
 
 world.add_objects([player1])
 
-game_gui  = GUI(player1)
+game_gui  = HUD(player1)
+world.add_hud(game_gui)
 ammo_gen = AmmoGenerator(10,8,5)
 enemy_gen = EnemyGenerator(15,14,12,0)
 
@@ -1009,21 +1067,20 @@ enemy_gen.generate(Enemy_type.small)
 enemy_gen.generate(Enemy_type.medium)
 enemy_gen.generate(Enemy_type.big)
 
+#endregion
 
-# Bucle principal del juego
+#region GAMELOOP
+
 while not rl.window_should_close():
-	# Lógica de actualización
-	# (Aquí va la lógica del juego, como mover personajes o detectar colisiones)
 
-	# Dibujar
 	rl.begin_drawing()
 	rl.clear_background(rl.RAYWHITE)
 
 	world.world_update()
-	game_gui.update()
-
 	
 	rl.end_drawing()
 
 # Cerrar ventana y liberar recursos
 rl.close_window()
+
+#endregion
