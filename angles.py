@@ -22,7 +22,7 @@ from enums import *
 rl.set_target_fps(60)
 
 
-#region CREACION DE SINGLETONS
+#region SINGLETONS
 
 world = World(True)
 sounds = SoundManager()
@@ -88,7 +88,7 @@ class TimerDecals:
 				world.remove_objects([self])
 #endregion
 
-# region GAME OBJECTS
+# region PLAYER
 
 class Player:
 	global world
@@ -101,7 +101,7 @@ class Player:
 		self.color = init_color
 		self.speed = 5
 		self.original_speed = self.speed
-		self.frict = 0.1
+		self.frict = 0.2
 		self.max_speed = 10
 		self.rotation_speed = 3
 		self.weapons = [Ammo_type.bullets,Ammo_type.cal50,Ammo_type.rockets]
@@ -134,24 +134,8 @@ class Player:
 	def create_lines(self):
 
 		self.line1 = Linesofplayer(self,self.angle,0,rl.RED)
-		'''
-		self.line2 = Linesofplayer(self,self.angle,8,rl.RED)
-		self.line3 = Linesofplayer(self,self.angle,16,rl.RED)
-		self.line4 = Linesofplayer(self,self.angle,24,rl.RED)
-		self.line5 = Linesofplayer(self,self.angle,360-8,rl.RED)
-		self.line6 = Linesofplayer(self,self.angle,360-16,rl.RED)
-		self.line7 = Linesofplayer(self,self.angle,360-24,rl.RED)
-		'''
-
 		self.children.append(self.line1)
-		'''
-		self.children.append(self.line2)
-		self.children.append(self.line3)
-		self.children.append(self.line4)
-		self.children.append(self.line5)
-		self.children.append(self.line6)
-		self.children.append(self.line7)
-		'''
+
 	def input_attack(self):
 
 		if rl.is_key_pressed(rl.KEY_ONE):
@@ -176,9 +160,52 @@ class Player:
 		if self.speed < 0:
 			self.speed = 0
 
-	
 
-	def input(self):
+	def normalize_and_output(self):
+
+		#NORMALIZAR MANUALMENTE PORQUE NO HAY UNA FUNCION DE MIERDA 
+		magnitude = math.sqrt(self.movement.x ** 2 + self.movement.y ** 2)
+		if magnitude != 0:
+			
+			self.movement = rl.Vector2((self.movement.x/magnitude),(self.movement.y/magnitude))
+	
+		#SI NO HAY TECLA DE ADELANTE O ATRAS, APLICAR FRICCION
+
+		#CONVERTIR A ENTERO PARA EVITAR EL JITTERNESS
+		self.movement.x,self.movement.y = round(self.movement.x,2),round(self.movement.y,2)
+
+		#REGRESAR EL MOVEMENT MULTIPLICADO POR LA VELOCIDAD REAL
+		return self.movement * self.speed		
+
+	def  strafe_input(self): 
+
+		self.speed_friction()
+
+		if rl.is_key_down(rl.KEY_A):
+			self.movement.x = -1
+			self.speed = self.original_speed
+		if rl.is_key_down(rl.KEY_D):
+			self.movement.x = 1
+			self.speed = self.original_speed
+		if rl.is_key_down(rl.KEY_W):
+			self.movement.y = -1
+			self.speed = self.original_speed
+		if rl.is_key_down(rl.KEY_S):
+			self.movement.y = 1
+			self.speed = self.original_speed
+
+		print(self.movement)
+		return self.normalize_and_output()
+
+	def mouse_aim(self):
+
+		mouse_vector = rl.Vector2(rl.get_mouse_x(),rl.get_mouse_y())
+		aim_vector = mouse_vector - self.position
+
+		aim_angle = math.atan2(aim_vector.y,aim_vector.x)
+		self.angle = rl.lerp(self.angle,math.degrees(aim_angle),0.9)
+
+	def input(self): #DEPRECATED
 
 
 		self.speed_friction()
@@ -200,24 +227,6 @@ class Player:
 			self.movement.x = -math.cos(radians(self.angle))
 			self.movement.y = -math.sin(radians(self.angle))
 
-
-
-		#NORMALIZAR MANUALMENTE PORQUE NO HAY UNA FUNCION DE MIERDA 
-		magnitude = math.sqrt(self.movement.x ** 2 + self.movement.y ** 2)
-		if magnitude != 0:
-			
-			self.movement = rl.Vector2((self.movement.x/magnitude),(self.movement.y/magnitude))
-	
-		#SI NO HAY TECLA DE ADELANTE O ATRAS, APLICAR FRICCION
-
-
-		#CONVERTIR A ENTERO PARA EVITAR EL JITTERNESS
-		self.movement.x,self.movement.y = round(self.movement.x,2),round(self.movement.y,2)
-		
-
-		#REGRESAR EL MOVEMENT MULTIPLICADO POR LA VELOCIDAD REAL
-		
-		return self.movement * self.speed
 
 	def collision_ammo(self):
 
@@ -247,13 +256,16 @@ class Player:
 	def update(self):
         
 		self.speed_friction()
-		self.position += self.input()
+		self.position += self.strafe_input()
+		self.mouse_aim()
 		self.update_children()
 		self.draw()
 		self.input_attack()
 		self.collision_ammo()
 		
+#endregion 
 
+#region LINES
 
 class Linesofplayer:
 	global world
@@ -318,6 +330,11 @@ class LinesofEnemy:
 		self.point2_position()
 
 		self.draw()
+
+
+#endregion
+
+#region ENEMY
 
 class Enemy:
 	global world
@@ -629,6 +646,9 @@ class Enemy:
 		self.check_collision()
 		self.draw()
 
+#endregion
+
+#region BULLET
 
 class Bullet:
 	global world
@@ -733,6 +753,10 @@ class Bullet:
 				world.add_objects([new_explosion])
 				sounds.play_sound(sounds.explosion_sound)
 			world.remove_objects([self])
+
+#endregion
+
+#region AMMO PICKUP
 
 class Ammo_pup:
 
