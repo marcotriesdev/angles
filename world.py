@@ -35,6 +35,14 @@ class World:
 			#print(f"removed {object}")
 			self.object_list.remove(object)
 
+	def remove_decals(self,decal):
+
+		self.decal_list.remove(decal)
+
+	def remove_background(self,background):
+
+		self.background_decals.remove(background)
+
 	def world_update(self): #IMPORTANTE EN EL ORDEN DEL DIBUJADO
 		
 		if self.background_decals:

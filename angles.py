@@ -24,7 +24,7 @@ rl.set_target_fps(60)
 
 #region CREACION DE SINGLETONS
 
-world = World(True)
+world = World(False)
 sounds = SoundManager()
 
 #endregion
@@ -286,7 +286,7 @@ class Enemy:
 							},
 						Enemy_type.big: {
 							"hp": 25,
-							"color":rl.Color(150,100,100,255),
+							"color":rl.Color(150,150,20,255),
 							"atk":20,
 							"size":40,
 							"range_radius":80,
@@ -312,7 +312,7 @@ class Enemy:
 		self.color = self.type_data[self.type]       ["color"]
 		self.color_hurt = rl.Color(255,0,0,255)
 		self.original_color = self.color
-		self.dead_color = rl.Color(self.original_color.r-40,self.original_color.g-40,self.original_color.b-40,self.original_color.a)
+		self.dead_color = rl.Color(self.original_color.r-10,self.original_color.g-10,self.original_color.b-10,self.original_color.a)
 		self.atk = self.type_data[self.type]         ["atk"]
 		self.size = self.type_data[self.type]        ["size"]
 		self.range_radius = self.type_data[self.type]["range_radius"] # 50 - 50 - 25 - 80 
@@ -475,7 +475,7 @@ class Enemy:
 		self.color = self.dead_color
 
 		if not self.bled:
-			new_bloodstain = Bloodstain(self.position,self.size)
+			new_bloodstain = Bloodstain(self.position,self.size,False,self.color)
 			world.add_decals([new_bloodstain])
 			self.bled = True
 		
@@ -483,10 +483,10 @@ class Enemy:
 
 	def gib_behavior(self):
 
-		self.color = rl.Color(100,0,0,100)
+		self.color = rl.Color(100,0,0,200)
 		if not self.bled:
-			new_bloodstain = Bloodstain(self.position,self.size)
-
+			new_bloodstain = Bloodstain(self.position,self.size,True,self.original_color)
+			
 			world.add_decals([new_bloodstain])
 			more_blood = BloodParticles(self.position,[self.color,self.dead_color],0)
 			world.add_objects([more_blood])
@@ -736,6 +736,7 @@ class HUD:
 
 		self.draw_background_hud()
 		self.draw_hud()
+		rl.draw_fps(5,5)
 
 #endregion
 
@@ -977,22 +978,54 @@ class SparkParticles(ParticleEmitter):
 #endregion
 
 # region DECALS
+class TimerDecals:
 
-class Bloodstain:
+	def _timer(self):
 
-	def __init__(self,position,size):
+		if self.color.a > 0:
+			if hasattr(self,"grow_speed"): #BLOODSTAIN
+				self.color.a -= 0.05
+			elif hasattr(self,"size_multiplier"): #HOLE
+				self.color.a -= 0.2
+
+
+		else:
+			if hasattr(self,"grow_speed"): #BLOODSTAIN
+				world.remove_decals(self)
+			elif hasattr(self,"size_multiplier"): #HOLE
+				world.remove_background(self)
+
+			
+
+class Bloodstain(TimerDecals):
+
+	def __init__(self,position,size,gibs: bool,skin_color):
 
 		self.position = rl.Vector2(position.x,position.y)
 		
-		self.size_h = uniform(size * 1.1,size* 1.5)
-		self.size_w = uniform(size * 1.1,size* 1.5) 
-		self.max_size_h = self.size_h *2.5
-		self.max_size_w = self.size_w * 2.5
+		self.size_h = uniform(size * 1.0,size* 1.4)
+		self.size_w = uniform(size * 1.1,size* 1.8) 
+		self.max_size_h = self.size_h *2.0
+		self.max_size_w = self.size_w * 2.0
 		self.grow_speed = uniform(0.05,0.3)
-		self.color = rl.Color(150,0,0,255)
-		self.shadow_color = rl.Color(120,0,0,255)
-		self.shine_color = rl.Color(180,0,0,255)
+		self.color = rl.Color(150,0,0,180)
+		self.shadow_color = rl.Color(120,0,0,self.color.a)
+		self.shine_color = rl.Color(180,0,0,self.color.a)
 
+		self.gibs = gibs
+		self.skin_color = rl.Color(skin_color.r,skin_color.g,skin_color.b,skin_color.a)
+
+		#FOR DROPS:
+
+		self.drop_amount = randrange(10,35)
+		self.drop_list = []
+		self.gib_list = []
+
+		if not self.gibs:
+			self.generate_drops(self.drop_amount)
+		else:
+			self.generate_drops(self.drop_amount+50)
+			self.generate_gibs(self.drop_amount)
 
 
 	def grow_bloodstain(self):
@@ -1006,19 +1039,72 @@ class Bloodstain:
 		if self.size_w >= self.max_size_w:
 			self.size_w = self.max_size_w
 
+	def generate_drops(self,amount):
+
+		for number in range(amount):
+
+			new_size = randrange(3,12)
+			new_angle = radians(randrange(1,360))
+			new_vector = rl.Vector2(math.cos(new_angle),math.sin(new_angle))
+			new_distance = new_vector  * uniform(self.size_w-5,self.max_size_w+20)
+			new_color = choice([self.color,self.shine_color,self.shadow_color])
+			
+			new_drop = [new_size,new_distance,new_color]
+			self.drop_list.append(new_drop)
+
+	def generate_gibs(self,amount):
+
+		for number in range(amount):
+			new_size = randrange(5,10)
+			new_angle = radians(randrange(1,360))
+			new_vector = rl.Vector2(math.cos(new_angle),math.sin(new_angle))
+			new_distance = new_vector  * uniform(self.size_w-5,self.max_size_w+20)
+			
+			new_gib = [new_size,new_distance,self.skin_color]
+			print(f"{self.skin_color}")
+			self.gib_list.append(new_gib)	
+
+	def draw_drops(self):
+
+		for drop in self.drop_list:
+		
+			rl.draw_circle_v(self.position+drop[1],
+							drop[0],
+							drop[2]
+							)
+
+	def draw_gibs(self):
+
+		if self.gibs:
+			for gib in self.gib_list:
+
+				rl.draw_circle_v(self.position+gib[1],
+								gib[0],
+								gib[2]
+								)
+		else:
+			pass
+
+
 	def draw(self):
 
-
+		self.shadow_color = rl.Color(120,0,0,self.color.a)
+		self.shine_color = rl.Color(180,0,0,self.color.a)
+		
 		rl.draw_ellipse(self.position.x-10,self.position.y+5,self.size_h,self.size_w,self.shine_color)
 		rl.draw_ellipse(self.position.x+10,self.position.y-5,self.size_h,self.size_w,self.shadow_color)
 		rl.draw_ellipse(self.position.x,self.position.y,self.size_h,self.size_w,self.color)
+
+		self.draw_drops()
+		self.draw_gibs()
 
 	def update(self):
 
 		self.grow_bloodstain()
 		self.draw()
 
-class Explosionstain:
+
+class Explosionstain(TimerDecals):
 
 	def __init__(self,position):
 
@@ -1033,6 +1119,7 @@ class Explosionstain:
 						45,
 						50]
 
+
 	def draw(self):
 
 		for radius in self.radiuses:
@@ -1044,6 +1131,7 @@ class Explosionstain:
 
 	def update(self):
 
+		self._timer()
 		self.draw()
 
 #endregion
