@@ -24,7 +24,7 @@ rl.set_target_fps(60)
 
 #region CREACION DE SINGLETONS
 
-world = World(False)
+world = World(True)
 sounds = SoundManager()
 
 #endregion
@@ -64,6 +64,29 @@ class EnemyGenerator:
 
 # endregion
  
+ # region DUCTAPE CLASES
+
+class TimerDecals:
+
+	def _timer(self):
+
+		if self.color.a > 0:
+			if hasattr(self,"grow_speed"): #BLOODSTAIN
+				self.color.a -= 0.05
+			elif hasattr(self,"size_multiplier"): #HOLE
+				self.color.a -= 0.02
+			elif hasattr(self,"explosion"):
+				self.color.a -= 0.5
+
+
+		else:
+			if hasattr(self,"grow_speed"): #BLOODSTAIN
+				world.remove_decals(self)
+			elif hasattr(self,"size_multiplier"): #HOLE
+				world.remove_background(self)
+			elif hasattr(self,"explosion"):
+				world.remove_objects([self])
+#endregion
 
 # region GAME OBJECTS
 
@@ -111,21 +134,24 @@ class Player:
 	def create_lines(self):
 
 		self.line1 = Linesofplayer(self,self.angle,0,rl.RED)
+		'''
 		self.line2 = Linesofplayer(self,self.angle,8,rl.RED)
 		self.line3 = Linesofplayer(self,self.angle,16,rl.RED)
 		self.line4 = Linesofplayer(self,self.angle,24,rl.RED)
 		self.line5 = Linesofplayer(self,self.angle,360-8,rl.RED)
 		self.line6 = Linesofplayer(self,self.angle,360-16,rl.RED)
 		self.line7 = Linesofplayer(self,self.angle,360-24,rl.RED)
+		'''
 
 		self.children.append(self.line1)
+		'''
 		self.children.append(self.line2)
 		self.children.append(self.line3)
 		self.children.append(self.line4)
 		self.children.append(self.line5)
 		self.children.append(self.line6)
 		self.children.append(self.line7)
-
+		'''
 	def input_attack(self):
 
 		if rl.is_key_pressed(rl.KEY_ONE):
@@ -222,9 +248,8 @@ class Player:
         
 		self.speed_friction()
 		self.position += self.input()
-
-		self.draw()
 		self.update_children()
+		self.draw()
 		self.input_attack()
 		self.collision_ammo()
 		
@@ -262,6 +287,37 @@ class Linesofplayer:
 
 		self.draw()
 
+class LinesofEnemy:
+	global world
+	def __init__(self,enemy, parent_angle, own_angle,color):
+
+		self.parent = enemy
+		self.point1 = rl.Vector2(enemy.position.x,enemy.position.y)
+		self.length = 50
+		self.point2 = rl.Vector2(0,0)
+		self.parent_angle = math.radians(parent_angle)
+		self.angle = math.radians(own_angle)
+		self.color = color
+		self.thic = 4
+
+	def point2_position(self):
+
+		self.point2.x = (self.length * math.cos(self.angle+self.parent_angle)) + self.parent.position.x
+		self.point2.y = (self.length * math.sin(self.angle+self.parent_angle)) + self.parent.position.y
+
+	def draw(self):
+
+		rl.draw_line_ex(self.point1,self.point2, self.thic, self.color)
+
+
+
+	def update(self):
+
+		self.parent_angle = math.radians(self.parent.angle)
+		self.point1 = self.parent.position
+		self.point2_position()
+
+		self.draw()
 
 class Enemy:
 	global world
@@ -337,6 +393,15 @@ class Enemy:
 		self.pushback_y = 0
 		self.friction = 0.1
 
+		self.movement_buffer = randrange(50,120)
+		self.angle = 0
+		self.angle_buffer = randrange(30,100)
+		self.angle_amount = randrange(1,3)
+		self.angle_sign = choice([1,-1])
+		self.movement_speed = choice([0,self.speed])
+
+		self.angle_line = LinesofEnemy(self,self.angle,0,rl.RED)
+
 
 	def timer_function(self):
 
@@ -344,7 +409,8 @@ class Enemy:
 			self.timer -= 1
 		else:
 			self.timer =  choice([50,120])
-	
+
+
 
 	def select_behavior(self):
 
@@ -437,9 +503,35 @@ class Enemy:
 					else:
 						self.state = Enemy_state.idle
 
+	def modern_movement(self):
+
+		if self.angle_buffer > 0:
+			self.angle_buffer -= 1
+			self.angle += self.angle_amount * self.angle_sign
+		else:
+			self.angle_buffer = randrange(30,100)
+			self.angle_amount = randrange(1,3)
+			self.angle_sign = choice([1,-1])
+
+		if self.movement_buffer > 0:
+			self.movement_buffer -= 1
+			self.position += rl.Vector2(math.cos(radians(self.angle)),
+										math.sin(radians(self.angle))) *self.movement_speed
+		else:
+			self.movement_buffer = randrange(50,120)
+			self.movement_speed = choice([0,self.speed])
+
+	def targeted_movement(self):
+
+		target_vector = self.target.position - self.position
+		self.angle = math.atan2(target_vector.y,target_vector.x)
+		#rl.lerp(self.angle,new_angle,0.2)
+		self.angle = math.degrees(self.angle)
+		self.position += rl.Vector2(math.cos(radians(self.angle)),
+							math.sin(radians(self.angle))) *self.speed *1.1
 
 
-	def idle_behavior(self):
+	def platform_movement(self): #OLD MOVEMENT DEPRECATED
 
 		if self.timer > 0:
 
@@ -456,16 +548,23 @@ class Enemy:
 			self.direction_value = choice([1,-1])
 			self.direction = choice(["x","y"])
 			self.timer = self.initial_timer
-			
+
+	def lerp_movement(self): #OLD MOVEMENT DEPRECATED
+
+		self.position.x = rl.lerp(self.position.x,self.target.position.x-self.target.size,self.speed * 0.02)
+		self.position.y = rl.lerp(self.position.y,self.target.position.y-self.target.size,self.speed * 0.02)
+
+
+	def idle_behavior(self):
+
+		self.modern_movement()	
 		self.check_pushback()
 		self.check_sight()
 
 	def chasing_behavior(self):
 		
 		self.check_sight()
-		self.position.x = rl.lerp(self.position.x,self.target.position.x-self.target.size,self.speed * 0.02)
-		self.position.y = rl.lerp(self.position.y,self.target.position.y-self.target.size,self.speed * 0.02)
-
+		self.targeted_movement()
 
 	def attack_behavior(self):
 		pass
@@ -513,7 +612,7 @@ class Enemy:
 
 		rl.draw_circle_v(self.position,self.range_radius,rl.Color(200,200,200,60))
 		rl.draw_text(f"{self.hp}",self.position.x,self.position.y,20,rl.BLACK)
-		rl.draw_text(f"{self.pushback_x}",self.position.x,self.position.y+20,20,rl.BLACK)
+		rl.draw_text(f"{self.angle}",self.position.x,self.position.y+20,20,rl.BLACK)
 
 
 	def draw(self):
@@ -523,6 +622,7 @@ class Enemy:
 
 	def update(self):
 
+		self.angle_line.update()
 		self.timer_function()
 		self.hurt_color()
 		self.select_behavior()
@@ -642,11 +742,13 @@ class Ammo_pup:
 
 		self.open = False
 
-		self.position = position
+		self.position = rl.Vector2(position.x,position.y)
 
-		self.rects = {Ammo_type.bullets:rl.Rectangle(self.position.x,self.position.y,30,50),
-						Ammo_type.cal50:rl.Rectangle(self.position.x,self.position.y,35,50),
-						Ammo_type.rockets:rl.Rectangle(self.position.x,self.position.y,40,80)}
+		self.size_modifier = 1
+
+		self.rects = {Ammo_type.bullets:rl.Rectangle(self.position.x,self.position.y,30*self.size_modifier,50*self.size_modifier),
+						Ammo_type.cal50:rl.Rectangle(self.position.x,self.position.y,35*self.size_modifier,50*self.size_modifier),
+						Ammo_type.rockets:rl.Rectangle(self.position.x,self.position.y,40*self.size_modifier,80*self.size_modifier)}
 		self.colors = {Ammo_type.bullets:rl.Color(100,100,20,255),
 						Ammo_type.cal50:rl.Color(80,150,20,255),
 						Ammo_type.rockets:rl.Color(80,150,80,255)}
@@ -654,8 +756,11 @@ class Ammo_pup:
 		self.rect = self.rects[self.type]
 
 	def draw(self):
-
+		self.rects = {Ammo_type.bullets:rl.Rectangle(self.position.x,self.position.y,30*self.size_modifier,50*self.size_modifier),
+						Ammo_type.cal50:rl.Rectangle(self.position.x,self.position.y,35*self.size_modifier,50*self.size_modifier),
+						Ammo_type.rockets:rl.Rectangle(self.position.x,self.position.y,40*self.size_modifier,80*self.size_modifier)}
 		if self.open:
+			self.size_modifier = 0.7
 			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,rl.Color(100,100,100,100))
 		else:	
 			rl.draw_rectangle_pro(self.rects[self.type],rl.Vector2(0,0),0,self.colors[self.type])
@@ -747,7 +852,7 @@ class MessagePickup:
 	def __init__(self,text,position):
 
 		self.text = text
-		self.position = position
+		self.position = rl.Vector2(position.x,position.y)
 		self.color = rl.Color(10,100,10,255)
 		self.active = True
 
@@ -778,7 +883,7 @@ class DamageMessage(MessagePickup):
 		self.color = rl.Color(200,10,10,255)
 
 
-class Explosion:
+class Explosion(TimerDecals):
 	global world
 	def __init__(self,position: rl.Vector2,size: int,power: int,angle):
 		
@@ -798,10 +903,9 @@ class Explosion:
 
 		self.draw()
 
+		self._timer()
 		if self.timer > 0:
 			self.timer -= 1
-		else:
-			self.terminate_explosion()
 
 		if self.timer == self.deactivate:
 			self.explosion = False
@@ -809,8 +913,7 @@ class Explosion:
 
 	def draw(self):
 
-		if world.debug:
-			rl.draw_circle_v(self.position,self.size,self.color)
+		rl.draw_circle_v(self.position,self.size,self.color)
 
 	def terminate_explosion(self):
 
@@ -977,25 +1080,7 @@ class SparkParticles(ParticleEmitter):
 
 #endregion
 
-# region DECALS
-class TimerDecals:
-
-	def _timer(self):
-
-		if self.color.a > 0:
-			if hasattr(self,"grow_speed"): #BLOODSTAIN
-				self.color.a -= 0.05
-			elif hasattr(self,"size_multiplier"): #HOLE
-				self.color.a -= 0.2
-
-
-		else:
-			if hasattr(self,"grow_speed"): #BLOODSTAIN
-				world.remove_decals(self)
-			elif hasattr(self,"size_multiplier"): #HOLE
-				world.remove_background(self)
-
-			
+# region DECALS	
 
 class Bloodstain(TimerDecals):
 
@@ -1054,15 +1139,25 @@ class Bloodstain(TimerDecals):
 
 	def generate_gibs(self,amount):
 
-		for number in range(amount):
+		for number in range(amount):  #GENERAR GIBS
 			new_size = randrange(5,10)
 			new_angle = radians(randrange(1,360))
 			new_vector = rl.Vector2(math.cos(new_angle),math.sin(new_angle))
 			new_distance = new_vector  * uniform(self.size_w-5,self.max_size_w+20)
 			
 			new_gib = [new_size,new_distance,self.skin_color]
-			print(f"{self.skin_color}")
-			self.gib_list.append(new_gib)	
+			
+			self.gib_list.append(new_gib)
+
+		for number in range(amount-5): #GENERAR TRIPAS
+			new_size = randrange(2,8)
+			new_angle = radians(randrange(1,360))
+			new_vector = rl.Vector2(math.cos(new_angle),math.sin(new_angle))
+			new_distance = new_vector  * uniform(self.size_w-5,self.max_size_w+5)
+			
+			new_gib = [new_size,new_distance,rl.Color(200,150,155,255)]
+			
+			self.gib_list.append(new_gib)			
 
 	def draw_drops(self):
 
@@ -1145,7 +1240,7 @@ world.add_objects([player1])
 game_gui  = HUD(player1)
 world.add_hud(game_gui)
 ammo_gen = AmmoGenerator(10,8,5)
-enemy_gen = EnemyGenerator(15,14,12,0)
+enemy_gen = EnemyGenerator(10,5,2,0)
 
 ammo_gen.generate(Ammo_type.bullets)
 ammo_gen.generate(Ammo_type.cal50)
