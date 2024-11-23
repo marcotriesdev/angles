@@ -1,12 +1,19 @@
+import raylibpy as rl
+
 class World:
 
-	def __init__(self,debug):
+	def __init__(self,debug,cursor):
 
 		self.debug : bool = debug
 		self.object_list = []
 		self.decal_list = []
 		self.background_decals = []
 		self.hud_list = []
+		self.cursor = cursor
+		self.global_delta = rl.get_frame_time()
+
+		if self.cursor:
+			rl.hide_cursor()
 
 	def add_objects(self,objects: list)->None:
 
@@ -44,6 +51,8 @@ class World:
 		self.background_decals.remove(background)
 
 	def world_update(self): #IMPORTANTE EN EL ORDEN DEL DIBUJADO
+
+		self.global_delta = rl.get_frame_time()
 		
 		if self.background_decals:
 			for decal in self.background_decals:

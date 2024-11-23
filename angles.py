@@ -24,7 +24,7 @@ rl.set_target_fps(60)
 
 #region SINGLETONS
 
-world = World(True)
+world = World(True,True)
 sounds = SoundManager()
 
 #endregion
@@ -36,7 +36,6 @@ class AmmoGenerator:
 	def __init__(self,bullets,cal50,rockets):
 
 		self.amounts = {Ammo_type.bullets: bullets,Ammo_type.cal50: cal50, Ammo_type.rockets: rockets}
-
 
 	def generate(self,ammo_type):
 
@@ -99,9 +98,9 @@ class Player:
 		self.size: int = 30
 		self.movement: rl.Vector2 = rl.Vector2(0,0)
 		self.color = init_color
-		self.speed = 5
+		self.speed = 400
 		self.original_speed = self.speed
-		self.frict = 0.2
+		self.frict = 10
 		self.max_speed = 10
 		self.rotation_speed = 3
 		self.weapons = [Ammo_type.bullets,Ammo_type.cal50,Ammo_type.rockets]
@@ -145,7 +144,7 @@ class Player:
 		if rl.is_key_pressed(rl.KEY_THREE):
 			self.weapon_selector = self.weapons[2]	
 
-		if rl.is_key_pressed(rl.KEY_SPACE):
+		if rl.is_mouse_button_pressed(rl.MOUSE_LEFT_BUTTON):
 			if self.ammo[self.weapon_selector] > 0:
 				new_bullet = Bullet(self.position,self.movement,self,self.weapon_selector)
 				world.add_objects([new_bullet])
@@ -155,7 +154,7 @@ class Player:
 	def speed_friction(self):
 
 		if self.speed > 0:
-			self.speed -= self.frict
+			self.speed -= self.frict 
 
 		if self.speed < 0:
 			self.speed = 0
@@ -175,7 +174,7 @@ class Player:
 		self.movement.x,self.movement.y = round(self.movement.x,2),round(self.movement.y,2)
 
 		#REGRESAR EL MOVEMENT MULTIPLICADO POR LA VELOCIDAD REAL
-		return self.movement * self.speed		
+		return self.movement * self.speed 
 
 	def  strafe_input(self): 
 
@@ -200,7 +199,7 @@ class Player:
 	def mouse_aim(self):
 
 		mouse_vector = rl.Vector2(rl.get_mouse_x(),rl.get_mouse_y())
-		aim_vector = mouse_vector - self.position
+		aim_vector = mouse_vector - self.position 
 
 		aim_angle = math.atan2(aim_vector.y,aim_vector.x)
 		self.angle = rl.lerp(self.angle,math.degrees(aim_angle),0.9)
@@ -256,7 +255,7 @@ class Player:
 	def update(self):
         
 		self.speed_friction()
-		self.position += self.strafe_input()
+		self.position += self.strafe_input() *world.global_delta	
 		self.mouse_aim()
 		self.update_children()
 		self.draw()
@@ -346,32 +345,32 @@ class Enemy:
 							"color":rl.Color(150,190,150,255),
 							"atk":5,
 							"size":30,
-							"range_radius":90,
-							"speed":2
+							"range_radius":120,
+							"speed":200
 							},
 						Enemy_type.medium: {
 							"hp": 15,
 							"color":rl.Color(140,140,120,255),
 							"atk":8,
 							"size":32,
-							"range_radius":90,
-							"speed":4
+							"range_radius":120,
+							"speed":400
 							},
 						Enemy_type.big: {
 							"hp": 25,
 							"color":rl.Color(150,150,20,255),
 							"atk":20,
 							"size":40,
-							"range_radius":80,
-							"speed":5
+							"range_radius":120,
+							"speed":500
 							},
 						Enemy_type.boss: {
 							"hp": 50,
 							"color":rl.Color(50,15,15,255),
 							"atk":15,
 							"size":50,
-							"range_radius":100,
-							"speed":5
+							"range_radius":150,
+							"speed":500
 							}
 						}
 
@@ -389,6 +388,7 @@ class Enemy:
 		self.atk = self.type_data[self.type]         ["atk"]
 		self.size = self.type_data[self.type]        ["size"]
 		self.range_radius = self.type_data[self.type]["range_radius"] # 50 - 50 - 25 - 80 
+		self.forget_multiplier = 1.8
 		self.speed = self.type_data[self.type]       ["speed"] * 0.4  
 
 
@@ -514,10 +514,10 @@ class Enemy:
 		if self.hp > 0:
 			for player in group:
 				if hasattr(player,"weapon_selector"):
-					if rl.check_collision_circles(self.position,self.range_radius,player.position,player.size):
+					if rl.check_collision_circles(self.position,self.range_radius,player.position,player.size) and self.state == Enemy_state.idle:
 						self.state = Enemy_state.chasing
 						self.target = player
-					else:
+					if not rl.check_collision_circles(self.position,self.range_radius*self.forget_multiplier,player.position,player.size) and self.state == Enemy_state.chasing:
 						self.state = Enemy_state.idle
 
 	def modern_movement(self):
@@ -533,7 +533,7 @@ class Enemy:
 		if self.movement_buffer > 0:
 			self.movement_buffer -= 1
 			self.position += rl.Vector2(math.cos(radians(self.angle)),
-										math.sin(radians(self.angle))) *self.movement_speed
+										math.sin(radians(self.angle))) *self.movement_speed *world.global_delta	
 		else:
 			self.movement_buffer = randrange(50,120)
 			self.movement_speed = choice([0,self.speed])
@@ -545,7 +545,7 @@ class Enemy:
 		#rl.lerp(self.angle,new_angle,0.2)
 		self.angle = math.degrees(self.angle)
 		self.position += rl.Vector2(math.cos(radians(self.angle)),
-							math.sin(radians(self.angle))) *self.speed *1.1
+							math.sin(radians(self.angle))) *self.speed *1.1 *world.global_delta	
 
 
 	def platform_movement(self): #OLD MOVEMENT DEPRECATED
@@ -595,7 +595,7 @@ class Enemy:
 			world.add_decals([new_bloodstain])
 			self.bled = True
 		
-		self.check_pushback(0.5)
+		self.check_pushback(0.5) 
 
 	def gib_behavior(self):
 
@@ -627,7 +627,8 @@ class Enemy:
 
 	def debug(self):
 
-		rl.draw_circle_v(self.position,self.range_radius,rl.Color(200,200,200,60))
+		rl.draw_circle_v(self.position,self.range_radius,rl.Color(200,200,200,60)) #RANGO DE VISION
+		rl.draw_circle_v(self.position,self.range_radius*self.forget_multiplier,rl.Color(200,200,200,60)) #RANGO DE DEJAR DE SEGUIR
 		rl.draw_text(f"{self.hp}",self.position.x,self.position.y,20,rl.BLACK)
 		rl.draw_text(f"{self.angle}",self.position.x,self.position.y+20,20,rl.BLACK)
 
@@ -673,9 +674,9 @@ class Bullet:
 							Ammo_type.rockets: 25
 							}
 
-		self.caliber_speed = {Ammo_type.bullets: 25,
-							Ammo_type.cal50: 27, 
-							Ammo_type.rockets: 15
+		self.caliber_speed = {Ammo_type.bullets: 1500,
+							Ammo_type.cal50: 1800, 
+							Ammo_type.rockets: 800
 							}
 
 		self.caliber_lifetime = {Ammo_type.bullets:100, 
@@ -700,7 +701,7 @@ class Bullet:
 		self.movement = rl.Vector2(math.cos(self.angle),math.sin(self.angle)) 
 		
 		#UPDATE POSITION
-		self.position += self.movement * self.speed
+		self.position += self.movement * self.speed *world.global_delta	
 
 		#LIMIT TO A MAXIMUM SPEED
 		rl.vector2_clamp(self.movement,-global_max_speed,global_max_speed)
@@ -797,6 +798,39 @@ class Ammo_pup:
 
 #region GUI OBJECTS
 
+class Cursor:
+
+	def __init__(self):
+
+		#self.position = rl.Vector2(position.x,position.y)
+		self.size = 5
+		self.thic = 3
+		self.color1 = rl.Color(100,100,100,255)
+		self.color2 = rl.Color(100,100,100,255)
+		self.line1_h = [rl.Vector2(0,5),rl.Vector2(0,15)]
+		self.line1_v = [rl.Vector2(5,0),rl.Vector2(15,0)]
+				
+	def draw(self):
+
+		sum = 0
+
+		for t in range(self.thic):
+			rl.draw_circle_lines(self.position.x,self.position.y, self.size+sum,self.color1)
+			rl.draw_circle_lines(self.position.x,self.position.y, self.size+sum+2,rl.WHITE)
+			sum += 2
+		
+		rl.draw_line_ex(self.position-self.line1_v[0],self.position-self.line1_v[1],self.thic,self.color2)
+		rl.draw_line_ex(self.position+self.line1_v[0],self.position+self.line1_v[1],self.thic,self.color2)
+		rl.draw_line_ex(self.position-self.line1_h[0],self.position-self.line1_h[1],self.thic,self.color2)
+		rl.draw_line_ex(self.position+self.line1_h[0],self.position+self.line1_h[1],self.thic,self.color2)
+
+
+	def update(self): 
+
+		self.position = rl.get_mouse_position()
+		self.draw()
+
+
 class HUD:
 
 	def __init__(self,player):
@@ -821,8 +855,9 @@ class HUD:
 							Ammo_type.cal50:rl.Rectangle(158,72,310,33),
 								Ammo_type.rockets:rl.Rectangle(158,102,270,33)}
 
-	def draw_background_hud(self):
+		self.cursor = Cursor()
 
+	def draw_background_hud(self):
 
 		for shadow in self.shadow_hud:
 			rl.draw_rectangle_rec(shadow,rl.DARKGRAY)	
@@ -865,6 +900,7 @@ class HUD:
 
 		self.draw_background_hud()
 		self.draw_hud()
+		self.cursor.update()
 		rl.draw_fps(5,5)
 
 #endregion
@@ -872,7 +908,7 @@ class HUD:
 #region VFX
 
 class MessagePickup:
-
+	global world
 	def __init__(self,text,position):
 
 		self.text = text
@@ -884,7 +920,7 @@ class MessagePickup:
 
 		if self.color.a > 1:
 			self.color.a -= 2
-			self.position.y -= 0.5
+			self.position.y -= 40 *world.global_delta
 		else:
 			world.remove_objects([self])
 
