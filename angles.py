@@ -10,7 +10,7 @@ print(rl.RAYLIB_VERSION)
 rl.set_trace_log_level(rl.LOG_ERROR)
 
 SCREEN_WIDTH = 1800
-SCREEN_HEIGHT = 800
+SCREEN_HEIGHT = 900
 
 global_max_speed = rl.Vector2(100,100)
 
@@ -115,9 +115,16 @@ class Player:
 		self.children = []
 		self.messages = []
 
+		self.hp = world.player_hp
+		self.stamina = world.player_st
 
 		self.create_lines()
 		
+	def update_global_var(self):
+
+		self.hp = world.player_hp
+		self.stamina = world.player_st
+
 	def replenish_ammo(self):
 
 		pass
@@ -254,6 +261,7 @@ class Player:
 
 	def update(self):
         
+		self.update_global_var()
 		self.speed_friction()
 		self.position += self.strafe_input() *world.global_delta	
 		self.mouse_aim()
@@ -483,7 +491,7 @@ class Enemy:
 						world.add_objects([new_damage_mgs])
 						self.hurt_timer = self.original_hurt_timer
 						obj.determine_particle()
-						
+			
 
 				if hasattr(obj,"explosion"):
 					if rl.check_collision_circles(self.position,self.size,obj.position,obj.size):
@@ -629,8 +637,8 @@ class Enemy:
 
 		rl.draw_circle_v(self.position,self.range_radius,rl.Color(200,200,200,60)) #RANGO DE VISION
 		rl.draw_circle_v(self.position,self.range_radius*self.forget_multiplier,rl.Color(200,200,200,60)) #RANGO DE DEJAR DE SEGUIR
-		rl.draw_text(f"{self.hp}",self.position.x,self.position.y,20,rl.BLACK)
-		rl.draw_text(f"{self.angle}",self.position.x,self.position.y+20,20,rl.BLACK)
+		rl.draw_text(f"{self.hp}",self.position.x+30,self.position.y+10,20,rl.BLACK)
+		#rl.draw_text(f"{self.angle}",self.position.x,self.position.y+20,20,rl.BLACK)
 
 
 	def draw(self):
@@ -832,13 +840,14 @@ class Cursor:
 
 
 class HUD:
-
+	global world
 	def __init__(self,player):
 
 		self.player = player
 		self.ammo_gray = rl.Rectangle(0,0,520,170)
 		self.ruler1_h = rl.Rectangle(0,0,SCREEN_WIDTH,50)
 		self.ruler1_v = rl.Rectangle(0,0,50,SCREEN_HEIGHT)
+		self.hp_st = rl.Rectangle(520,60,520,100)
 
 		self.shadow1 = rl.Rectangle(520,50,SCREEN_WIDTH-170,10)
 		self.shadow2 = rl.Rectangle(50,170,520-50,10)
@@ -847,15 +856,37 @@ class HUD:
 		self.ruler1_light_v = rl.Rectangle(0,0,20,SCREEN_HEIGHT)
 		self.ammo_lightgray = rl.Rectangle(0,0,500,150)
 
-		self.background_hud = [self.ruler1_h,self.ruler1_v,self.ammo_gray]
+		self.background_hud = [self.hp_st,self.ruler1_h,self.ruler1_v,self.ammo_gray]
 		self.shadow_hud = [self.shadow1,self.shadow2]
 		self.foreground_hud = [self.ruler_light_h,self.ruler1_light_v,self.ammo_lightgray]
 
 		self.weapon_box = {Ammo_type.bullets:rl.Rectangle(158,41,310,33), 
 							Ammo_type.cal50:rl.Rectangle(158,72,310,33),
-								Ammo_type.rockets:rl.Rectangle(158,102,270,33)}
+							Ammo_type.rockets:rl.Rectangle(158,102,270,33)}
+
+		self.hp_bar_length = 250 * (world.player_hp/100)  #update() esto
+		self.st_bar_length = 250 * (world.player_st/100)  #update() esto
+
+		self.hp_bar = rl.Rectangle(645,
+									80,
+									self.hp_bar_length,
+									20)
+
+		self.st_bar = rl.Rectangle(645,
+									120,
+									self.st_bar_length,
+									20)
 
 		self.cursor = Cursor()
+
+	def draw_player_stats(self):
+		
+		rl.draw_rectangle_rec(self.hp_bar,rl.RED)
+		rl.draw_rectangle_rec(self.st_bar,rl.GREEN)
+
+		rl.draw_text("Health: ",530,80,25,rl.BLACK)
+		rl.draw_text("Stamina: ",530,120,25,rl.BLACK)
+
 
 	def draw_background_hud(self):
 
@@ -868,7 +899,7 @@ class HUD:
 		for foreground in self.foreground_hud:
 			rl.draw_rectangle_rec(foreground,rl.LIGHTGRAY)
 
-	def draw_hud(self):
+	def draw_ammo(self):
 
 		
 		rl.draw_rectangle_lines_ex(self.weapon_box[self.player.weapon_selector], 3, rl.Color(50,250,0,200)) 
@@ -899,7 +930,8 @@ class HUD:
 	def update(self):
 
 		self.draw_background_hud()
-		self.draw_hud()
+		self.draw_ammo()
+		self.draw_player_stats()
 		self.cursor.update()
 		rl.draw_fps(5,5)
 

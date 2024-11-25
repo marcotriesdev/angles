@@ -12,6 +12,9 @@ class World:
 		self.cursor = cursor
 		self.global_delta = rl.get_frame_time()
 
+		self.player_hp = 100
+		self.player_st = 100
+
 		if self.cursor:
 			rl.hide_cursor()
 
@@ -63,10 +66,12 @@ class World:
 				decal.update()
 
 		if self.object_list:
+
 			for object in self.object_list:
-				object.update()
 				if hasattr(object,"debug") and self.debug:
 					object.debug()
+				object.update()
+
 
 		if self.object_list:
 
